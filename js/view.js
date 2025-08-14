@@ -3,6 +3,12 @@ export default class View {
     constructor(translator) {
         this.t = translator;
 
+        // Overlays
+        this.lockedView = document.getElementById('locked-view');
+        this.loadingOverlay = document.getElementById('loading-overlay');
+        this.loadingMessage = document.getElementById('loading-message');
+        this.toastContainer = document.querySelector('.toast-container');
+
         // Sidebar
         this.meetingsList = document.getElementById('meetings-sidebar-list');
         this.newMeetingBtn = document.getElementById('new-meeting-btn');
@@ -12,6 +18,8 @@ export default class View {
         this.emptyView = document.getElementById('empty-view');
         this.mainMeetingTitle = document.getElementById('main-meeting-title');
         this.signMeetingBtn = document.getElementById('sign-meeting-btn');
+        this.lockWorkspaceBtn = document.getElementById('lock-workspace-btn');
+        this.settingsBtn = document.getElementById('settings-btn');
 
         // Import/Export
         this.importBtn = document.getElementById('import-btn');
@@ -37,6 +45,12 @@ export default class View {
         this.newMeetingModal = new bootstrap.Modal(this.newMeetingModalEl);
         this.newMeetingForm = document.getElementById('new-meeting-form');
         this.newMeetingTemplateSelect = document.getElementById('new-meeting-template');
+
+        // Confirmation Modal
+        this.confirmationModalEl = document.getElementById('confirmation-modal');
+        this.confirmationModal = new bootstrap.Modal(this.confirmationModalEl);
+        this.confirmationModalBody = document.getElementById('confirmation-modal-body');
+        this.confirmationModalConfirmBtn = document.getElementById('confirmation-modal-confirm-btn');
     }
 
     // --- RENDER METHODS ---
@@ -82,7 +96,7 @@ export default class View {
         form.className = 'd-flex mb-3';
         form.innerHTML = `
             <input type="text" class="form-control me-2" placeholder="${this.t('new_agenda_item_placeholder')}" required>
-            <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button>
         `;
         this.agendaPane.appendChild(form);
 
@@ -98,7 +112,7 @@ export default class View {
                 listItem.draggable = true;
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'btn btn-danger btn-sm delete-agenda-item-btn';
-                deleteBtn.textContent = 'X';
+                deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
                 deleteBtn.setAttribute('aria-label', `${this.t('delete_btn')} ${item.título}`);
                 listItem.appendChild(deleteBtn);
                 list.appendChild(listItem);
@@ -118,7 +132,7 @@ export default class View {
         const addNoteBlockBtn = document.createElement('button');
         addNoteBlockBtn.id = 'add-note-block-btn';
         addNoteBlockBtn.className = 'btn btn-primary btn-sm mb-3';
-        addNoteBlockBtn.textContent = this.t('add_note_block_btn');
+        addNoteBlockBtn.innerHTML = `<i class="bi bi-plus-lg"></i> ${this.t('add_note_block_btn')}`;
         this.notasPane.appendChild(addNoteBlockBtn);
 
         const noteBlocksContainer = document.createElement('div');
@@ -137,8 +151,8 @@ export default class View {
                     </div>
                     <textarea class="form-control" rows="5">${nb.contenido}</textarea>
                     <div class="mt-1">
-                        <button class="btn btn-success btn-sm save-note-block-btn">${this.t('save_btn')}</button>
-                        <button class="btn btn-danger btn-sm delete-note-block-btn" aria-label="${this.t('delete_btn')}">${this.t('delete_btn')}</button>
+                        <button class="btn btn-success btn-sm save-note-block-btn"><i class="bi bi-save"></i> ${this.t('save_btn')}</button>
+                        <button class="btn btn-danger btn-sm delete-note-block-btn" aria-label="${this.t('delete_btn')}"><i class="bi bi-trash"></i> ${this.t('delete_btn')}</button>
                     </div>
                 `;
                 noteBlocksContainer.appendChild(wrapper);
@@ -162,7 +176,7 @@ export default class View {
                 <option value="M" selected>${this.t('priority_medium')}</option>
                 <option value="H">${this.t('priority_high')}</option>
             </select>
-            <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button>
         `;
         this.tareasPane.appendChild(form);
 
@@ -187,7 +201,7 @@ export default class View {
                             <option value="Doing" ${task.estado === 'Doing' ? 'selected' : ''}>${this.t('status_doing')}</option>
                             <option value="Done" ${task.estado === 'Done' ? 'selected' : ''}>${this.t('status_done')}</option>
                         </select>
-                        <button class="btn btn-danger btn-sm delete-task-btn" aria-label="${this.t('delete_btn')}">X</button>
+                        <button class="btn btn-danger btn-sm delete-task-btn" aria-label="${this.t('delete_btn')}"><i class="bi bi-trash"></i></button>
                     </div>
                 `;
                 list.appendChild(item);
@@ -409,7 +423,7 @@ export default class View {
         verifier.className = 'mb-4 p-3 border rounded';
         verifier.innerHTML = `
             <h5>Decision Ledger</h5>
-            <button id="verify-chain-btn" class="btn btn-primary">${this.t('verify_chain_btn')}</button>
+            <button id="verify-chain-btn" class="btn btn-primary"><i class="bi bi-shield-check"></i> ${this.t('verify_chain_btn')}</button>
             <div id="chain-status" class="mt-2"></div>
         `;
         this.auditPane.appendChild(verifier);
@@ -438,6 +452,66 @@ export default class View {
         } else {
             statusDiv.className = 'alert alert-danger mt-2';
             statusDiv.textContent = this.t('chain_invalid');
+        }
+    }
+
+    showLockedState(show) {
+        if (show) {
+            this.lockedView.classList.remove('d-none');
+        } else {
+            this.lockedView.classList.add('d-none');
+        }
+    }
+
+    bindUnlock(handler) {
+        const form = this.lockedView.querySelector('#unlock-form');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const password = form.querySelector('#unlock-password').value;
+            if (password) {
+                handler(password);
+                form.reset();
+            }
+        });
+    }
+
+    bindLockWorkspace(handler) {
+        this.lockWorkspaceBtn.addEventListener('click', handler);
+    }
+
+    bindSecuritySettingsEvents(showHandler, enableEncryptionHandler) {
+        this.settingsBtn.addEventListener('click', showHandler);
+
+        const view = document.getElementById('security-settings-view');
+        view.addEventListener('submit', e => {
+            if (e.target.id === 'enable-encryption-form') {
+                e.preventDefault();
+                const password = e.target.querySelector('#encryption-password').value;
+                if (password) {
+                    enableEncryptionHandler(password);
+                }
+            }
+        });
+    }
+
+    renderSecuritySettings(isEncrypted) {
+        const view = document.getElementById('security-settings-view');
+        if (!view) return;
+
+        if (isEncrypted) {
+            view.innerHTML = `<p class="text-success">Workspace encryption is enabled.</p>`;
+        } else {
+            view.innerHTML = `
+                <p>Enable encryption to protect your workspace with a password.</p>
+                <div class="alert alert-warning"><strong>Warning:</strong> This is irreversible. You MUST remember your password. If you forget it, your data will be permanently lost.</div>
+                <form id="enable-encryption-form">
+                    <div class="mb-3">
+                        <label for="encryption-password" class="form-label">New Password</label>
+                        <input type="password" id="encryption-password" class="form-control" required minlength="8">
+                    </div>
+                    <button type="submit" class="btn btn-danger">Enable Encryption</button>
+                </form>
+            `;
         }
     }
 
@@ -478,19 +552,35 @@ export default class View {
             return;
         }
 
+        const getIconForEvent = (type) => {
+            switch (type) {
+                case 'MEETING_CREATED': return 'bi-calendar-plus';
+                case 'AGENDA_ITEM_CREATED': return 'bi-list-ol';
+                case 'TASK_CREATED': return 'bi-list-task';
+                case 'TASK_STATUS_CHANGED': return 'bi-check2-square';
+                case 'NOTE_BLOCK_CREATED': return 'bi-file-earmark-plus';
+                case 'MEETING_SHARED': return 'bi-share';
+                default: return 'bi-dot';
+            }
+        };
+
         const list = document.createElement('ul');
         list.className = 'list-group';
 
         events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(event => {
             const item = document.createElement('li');
-            item.className = 'list-group-item';
+            item.className = 'list-group-item d-flex';
 
             const details = Object.entries(event.details).map(([key, value]) => `<li>${key}: ${value}</li>`).join('');
+            const icon = getIconForEvent(event.type);
 
             item.innerHTML = `
-                <small class="text-muted">${new Date(event.timestamp).toLocaleString()}</small>
-                <div><strong>${event.type}</strong></div>
-                <ul>${details}</ul>
+                <div class="me-3"><i class="${icon}"></i></div>
+                <div>
+                    <small class="text-muted">${new Date(event.timestamp).toLocaleString()}</small>
+                    <div><strong>${event.type}</strong></div>
+                    <ul>${details}</ul>
+                </div>
             `;
             list.appendChild(item);
         });
@@ -499,36 +589,40 @@ export default class View {
     }
 
     updateAcuerdometroWidget(score) {
-        const widget = this.agreementsPane.querySelector('#acuerdometro-widget');
-        const statusSpan = this.agreementsPane.querySelector('#acuerdometro-status');
-        if (!widget || !statusSpan) return;
+        const progressBar = this.agreementsPane.querySelector('#acuerdometro-bar');
+        if (!progressBar) return;
 
-        let colorClass = 'bg-light';
-        let statusText = '---';
+        const percentage = score >= 0 ? Math.round(score * 100) : 0;
 
+        let colorClass = 'bg-secondary';
         if (score >= 0.8) {
             colorClass = 'bg-success';
-            statusText = 'Excellent';
         } else if (score >= 0.5) {
             colorClass = 'bg-warning';
-            statusText = 'Average';
         } else if (score >= 0) {
             colorClass = 'bg-danger';
-            statusText = 'At Risk';
         }
 
-        widget.className = 'mb-3 p-2 rounded text-white ' + colorClass;
-        statusSpan.textContent = `${statusText} (${(score * 100).toFixed(0)}%)`;
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+        progressBar.setAttribute('aria-valuenow', percentage);
+        progressBar.className = 'progress-bar'; // Reset classes
+        progressBar.classList.add(colorClass);
     }
 
     renderAgreements(agreements) {
         this.agreementsPane.innerHTML = `<h4>${this.t('agreements_header')}</h4>`;
 
-        // Placeholder for Acuerdómetro widget
+        // Acuerdómetro widget
         const aemetroWidget = document.createElement('div');
         aemetroWidget.id = 'acuerdometro-widget';
-        aemetroWidget.className = 'mb-3 p-2 rounded';
-        aemetroWidget.innerHTML = `<h6>Acuerdómetro: <span id="acuerdometro-status">---</span></h6>`;
+        aemetroWidget.className = 'mb-4';
+        aemetroWidget.innerHTML = `
+            <h6>Acuerdómetro</h6>
+            <div class="progress" style="height: 20px;">
+                <div id="acuerdometro-bar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+            </div>
+        `;
         this.agreementsPane.appendChild(aemetroWidget);
 
         const form = document.createElement('form');
@@ -549,7 +643,7 @@ export default class View {
                 </select>
             </div>
             <div class="col-md-1">
-                <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+                <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button>
             </div>
         `;
         this.agreementsPane.appendChild(form);
@@ -564,7 +658,7 @@ export default class View {
                 listItem.innerHTML = `
                     <div class="d-flex w-100 justify-content-between">
                         <p class="mb-1">${item.statement}</p>
-                        <button class="btn btn-danger btn-sm delete-agreement-btn">X</button>
+                        <button class="btn btn-danger btn-sm delete-agreement-btn"><i class="bi bi-trash"></i></button>
                     </div>
                     <div class="d-flex w-100 justify-content-between align-items-center">
                         <small>Priority: ${item.priority} | Deadline: ${new Date(item.deadline).toLocaleDateString()}</small>
@@ -591,7 +685,7 @@ export default class View {
         form.className = 'd-flex mb-3';
         form.innerHTML = `
             <input type="text" class="form-control me-2" placeholder="${this.t('new_decision_placeholder')}" required>
-            <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button>
         `;
         this.decisionsPane.appendChild(form);
 
@@ -605,7 +699,7 @@ export default class View {
                 listItem.innerHTML = `
                     <p>${item.statement}</p>
                     <small class="text-muted">Hash: ${item.hashSelf ? item.hashSelf.substring(0, 12) + '...' : 'N/A'}</small>
-                    <button class="btn btn-danger btn-sm float-end delete-decision-btn">X</button>
+                    <button class="btn btn-danger btn-sm float-end delete-decision-btn"><i class="bi bi-trash"></i></button>
                 `;
                 list.appendChild(listItem);
             });
@@ -613,5 +707,54 @@ export default class View {
             list.innerHTML = `<p class="text-muted">${this.t('no_decisions_yet')}</p>`;
         }
         this.decisionsPane.appendChild(list);
+    }
+
+    showToast(message, type = 'info') {
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastEl.role = 'alert';
+        toastEl.ariaLive = 'assertive';
+        toastEl.ariaAtomic = 'true';
+
+        toastEl.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+
+        this.toastContainer.appendChild(toastEl);
+
+        const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        toast.show();
+
+        toastEl.addEventListener('hidden.bs.toast', () => {
+            toastEl.remove();
+        });
+    }
+
+    showConfirmation(message, onConfirm) {
+        this.confirmationModalBody.textContent = message;
+
+        const confirmHandler = () => {
+            onConfirm();
+            this.confirmationModal.hide();
+            this.confirmationModalConfirmBtn.removeEventListener('click', confirmHandler);
+        };
+
+        this.confirmationModalConfirmBtn.addEventListener('click', confirmHandler);
+
+        this.confirmationModal.show();
+    }
+
+    showLoading(show, message = 'Loading...') {
+        if (show) {
+            this.loadingMessage.textContent = message;
+            this.loadingOverlay.classList.remove('d-none');
+        } else {
+            this.loadingOverlay.classList.add('d-none');
+        }
     }
 }

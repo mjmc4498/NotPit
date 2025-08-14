@@ -33,6 +33,8 @@ export default class Controller {
         this.view.bindSignMeeting(this.handleSignMeeting);
         // Import
         this.view.bindImportEvents(this.handleImport);
+        this.view.bindLockWorkspace(this.handleLockWorkspace);
+        this.view.bindSecuritySettingsEvents(this.handleShowSecuritySettings, this.handleEnableEncryption);
 
         this.showMeetingsInSidebar();
         this.view.showEmptyView();
@@ -190,11 +192,12 @@ export default class Controller {
     }
 
     handleDeleteAgendaItem = async (id) => {
-        if (confirm(this.t('confirm_delete_agenda_item'))) {
+        this.view.showConfirmation(this.t('confirm_delete_agenda_item'), async () => {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_ITEM_DELETED', details: { id } });
             await this.store.deleteAgendaItem(id);
             await this.refreshAgendaView();
-        }
+            this.view.showToast('Agenda item deleted.', 'info');
+        });
     }
 
     handleUpdateAgendaOrder = async (reorderedData) => {
@@ -227,16 +230,17 @@ export default class Controller {
             noteBlockToSave.contenido = content;
             await this.store.saveNoteBlock(noteBlockToSave);
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_UPDATED', details: { id } });
-            alert(this.t('note_saved_success'));
+            this.view.showToast(this.t('note_saved_success'), 'success');
         }
     }
 
     handleDeleteNoteBlock = async (id) => {
-        if (confirm(this.t('confirm_delete_note_block'))) {
+        this.view.showConfirmation(this.t('confirm_delete_note_block'), async () => {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_DELETED', details: { id } });
             await this.store.deleteNoteBlock(id);
             await this.refreshNotesView();
-        }
+            this.view.showToast('Note block deleted.', 'info');
+        });
     }
 
     // --- Task Handlers ---
@@ -270,11 +274,12 @@ export default class Controller {
     };
 
     handleDeleteTask = async (id) => {
-        if (confirm(this.t('confirm_delete_task'))) {
+        this.view.showConfirmation(this.t('confirm_delete_task'), async () => {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_DELETED', details: { id } });
             await this.store.deleteTask(id);
             await this.refreshTasksView();
-        }
+            this.view.showToast('Task deleted.', 'info');
+        });
     };
 
     // --- Import/Export Handlers ---
@@ -297,13 +302,13 @@ export default class Controller {
             this._downloadFile(filename, JSON.stringify(workspaceData, null, 2));
         } catch (error) {
             console.error('Workspace export failed:', error);
-            alert(this.t('workspace_export_fail'));
+            this.view.showToast(this.t('workspace_export_fail'), 'danger');
         }
     }
 
     handleExportSingleMeetingJSON = async () => {
         if (!this.activeMeetingId) {
-            alert(this.t('export_meeting_select_prompt'));
+            this.view.showToast(this.t('export_meeting_select_prompt'), 'warning');
             return;
         }
         try {
@@ -316,7 +321,7 @@ export default class Controller {
             this._downloadFile(filename, JSON.stringify(bundledData, null, 2));
         } catch (error) {
             console.error('Meeting export failed:', error);
-            alert(this.t('meeting_export_fail'));
+            this.view.showToast(this.t('meeting_export_fail'), 'danger');
         }
     }
 
@@ -336,13 +341,13 @@ export default class Controller {
 
     handleExportTasksCSV = async () => {
         if (!this.activeMeetingId) {
-            alert(this.t('export_tasks_select_prompt'));
+            this.view.showToast(this.t('export_tasks_select_prompt'), 'warning');
             return;
         }
         try {
             const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
             if (tasks.length === 0) {
-                alert(this.t('export_no_tasks'));
+                this.view.showToast(this.t('export_no_tasks'), 'info');
                 return;
             }
             const csvData = this._convertToCSV(tasks);
@@ -350,7 +355,7 @@ export default class Controller {
             this._downloadFile(filename, csvData, 'text/csv;charset=utf-8;');
         } catch (error) {
             console.error('CSV export failed:', error);
-            alert(this.t('csv_export_fail'));
+            this.view.showToast(this.t('csv_export_fail'), 'danger');
         }
     }
 
@@ -398,7 +403,7 @@ export default class Controller {
 
     handleExportMarkdown = async () => {
         if (!this.activeMeetingId) {
-            alert(this.t('export_meeting_select_prompt'));
+            this.view.showToast(this.t('export_meeting_select_prompt'), 'warning');
             return;
         }
         try {
@@ -413,19 +418,19 @@ export default class Controller {
             this._downloadFile(filename, markdownContent, 'text/markdown;charset=utf-8;');
         } catch (error) {
             console.error('Markdown export failed:', error);
-            alert(this.t('markdown_export_fail'));
+            this.view.showToast(this.t('markdown_export_fail'), 'danger');
         }
     }
 
     // --- Sharing Handlers ---
     handleShare = async () => {
         if (!this.activeMeetingId) {
-            alert(this.t('export_meeting_select_prompt'));
+            this.view.showToast(this.t('export_meeting_select_prompt'), 'warning');
             return;
         }
 
         if (!navigator.share) {
-            alert(this.t('web_share_api_not_supported'));
+            this.view.showToast(this.t('web_share_api_not_supported'), 'danger');
             return;
         }
 
@@ -449,36 +454,36 @@ export default class Controller {
             // Don't alert on AbortError, which happens if the user cancels the share.
             if (error.name !== 'AbortError') {
                 console.error('Share failed:', error);
-                alert(this.t('share_failed'));
+                this.view.showToast(this.t('share_failed'), 'danger');
             }
         }
     }
 
     handleCopyTasksCSV = async () => {
         if (!this.activeMeetingId) {
-            alert(this.t('export_tasks_select_prompt'));
+            this.view.showToast(this.t('export_tasks_select_prompt'), 'warning');
             return;
         }
 
         if (!navigator.clipboard) {
-            alert(this.t('clipboard_api_not_supported'));
+            this.view.showToast(this.t('clipboard_api_not_supported'), 'danger');
             return;
         }
 
         try {
             const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
             if (tasks.length === 0) {
-                alert(this.t('export_no_tasks'));
+                this.view.showToast(this.t('export_no_tasks'), 'info');
                 return;
             }
             const csvData = this._convertToCSV(tasks);
             await navigator.clipboard.writeText(csvData);
-            alert(this.t('csv_copied_success'));
+            this.view.showToast(this.t('csv_copied_success'), 'success');
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASKS_COPIED', details: { format: 'CSV' } });
 
         } catch (error) {
             console.error('Copy to clipboard failed:', error);
-            alert(this.t('copy_failed'));
+            this.view.showToast(this.t('copy_failed'), 'danger');
         }
     }
 
@@ -501,22 +506,21 @@ export default class Controller {
                     throw new Error(this.t('import_invalid_format'));
                 }
 
-                const confirmImport = confirm(this.t(isWorkspace ? 'import_confirm_workspace' : 'import_confirm_single'));
-                if (confirmImport) {
+                this.view.showConfirmation(this.t(isWorkspace ? 'import_confirm_workspace' : 'import_confirm_single'), async () => {
                     await this.store.importData(data);
-                    alert(this.t('import_success'));
+                    this.view.showToast(this.t('import_success'), 'success');
                     await this.showMeetingsInSidebar(); // Refresh the view
-                }
+                });
             } catch (error) {
                 console.error('Import failed:', error);
-                alert(`${this.t('import_fail')}: ${error.message}`);
+                this.view.showToast(`${this.t('import_fail')}: ${error.message}`, 'danger');
             } finally {
                 // Reset the file input so the user can select the same file again
                 event.target.value = '';
             }
         };
         reader.onerror = () => {
-            alert(this.t('import_file_read_error'));
+            this.view.showToast(this.t('import_file_read_error'), 'danger');
             event.target.value = '';
         };
         reader.readAsText(file);
@@ -538,10 +542,11 @@ export default class Controller {
     }
 
     handleDeleteAgreement = async (id) => {
-        if (confirm(this.t('confirm_delete_agreement'))) {
+        this.view.showConfirmation(this.t('confirm_delete_agreement'), async () => {
             await this.store.deleteAgreement(id);
             await this.refreshAgreementsView();
-        }
+            this.view.showToast('Agreement deleted.', 'info');
+        });
     }
 
     handleUpdateAgreement = async (id, updatedFields) => {
@@ -567,10 +572,11 @@ export default class Controller {
     }
 
     handleDeleteDecision = async (id) => {
-        if (confirm(this.t('confirm_delete_decision'))) { // Note: new i18n key needed
+        this.view.showConfirmation(this.t('confirm_delete_decision'), async () => {
             await this.store.deleteDecision(id);
             await this.refreshDecisionsView();
-        }
+            this.view.showToast('Decision deleted.', 'info');
+        });
     }
 
     handleSignMeeting = async () => {
@@ -604,13 +610,13 @@ export default class Controller {
                 }
             }
 
-            alert(this.t('sign_success')); // new i18n key
+            this.view.showToast(this.t('sign_success'), 'success');
             await this.refreshAgreementsView();
             this.view.toggleSignButton(false); // Hide button immediately
 
         } catch (error) {
             console.error("Signing failed:", error);
-            alert(this.t('sign_fail')); // new i18n key
+            this.view.showToast(this.t('sign_fail'), 'danger');
         }
     }
 
@@ -624,5 +630,54 @@ export default class Controller {
             console.error("Chain verification failed:", error);
             this.view.displayChainStatus(false);
         }
+    }
+
+    handleLockWorkspace = () => {
+        // Clear the in-memory key and reload the page.
+        // The startup logic in app.js will then force the locked view.
+        this.store.setEncryptionKey(null);
+        location.reload();
+    }
+
+    // --- Security Handlers ---
+    handleShowSecuritySettings = async () => {
+        const isEncrypted = await this.store.getMetadata('encryption_enabled');
+        this.view.renderSecuritySettings(isEncrypted);
+    }
+
+    handleEnableEncryption = async (password) => {
+        this.view.showConfirmation(this.t('confirm_enable_encryption'), async () => {
+            this.view.showLoading(true, 'Encrypting workspace... This may take a moment.');
+            try {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+            const key = await deriveKey(password, salt);
+
+            // Set key in store temporarily to encrypt everything
+            this.store.setEncryptionKey(key);
+
+            // Create and save the canary
+            const canary = { test: 'ok' };
+            const encryptedCanary = await encrypt(key, canary);
+            await this.store.setMetadata('encryption_canary', encryptedCanary);
+
+            // Re-encrypt all data
+            await this.store.encryptAllData();
+
+            // Persist salt and enable encryption flag
+            const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+            await this.store.setMetadata('encryption_salt', saltHex);
+            await this.store.setMetadata('encryption_enabled', true);
+
+            this.view.showLoading(false);
+            this.view.showToast(this.t('encryption_enabled_success'), 'success');
+            setTimeout(() => location.reload(), 2000); // Give user time to read toast
+
+            } catch (error) {
+                this.view.showLoading(false);
+                console.error("Failed to enable encryption:", error);
+                this.view.showToast(this.t('encryption_enabled_fail'), 'danger');
+                this.store.setEncryptionKey(null); // Clear key on failure
+            }
+        });
     }
 }

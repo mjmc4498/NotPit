@@ -1,10 +1,11 @@
 // This module manages all application data using IndexedDB.
-import { sha256 } from './crypto.js';
+import { sha256, encrypt, decrypt } from './crypto.js';
 
 export default class Store {
     constructor(dbName = 'NotPitDB') {
         this.dbName = dbName;
         this.db = null;
+        this.encryptionKey = null; // Will hold the AES-GCM key for the session
     }
 
     /**
@@ -17,12 +18,16 @@ export default class Store {
         }
 
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 5); // Version 5 for Acuerdometro
+            const request = indexedDB.open(this.dbName, 6); // Version 6 for Encryption
 
             request.onupgradeneeded = event => {
                 const db = event.target.result;
                 const oldVersion = event.oldVersion;
                 const transaction = event.target.transaction;
+
+                if (oldVersion < 6) {
+                    db.createObjectStore('app_metadata', { keyPath: 'key' });
+                }
 
                 if (oldVersion < 5) {
                     const agreementsStore = db.createObjectStore('agreements', { keyPath: 'id', autoIncrement: true });
@@ -147,24 +152,74 @@ export default class Store {
         });
     }
 
+    // --- Encryption and Metadata Methods ---
+    setEncryptionKey(key) {
+        this.encryptionKey = key;
+    }
+
+    async getMetadata(key) {
+        return this._transact('app_metadata', 'readonly', (store, resolve) => {
+            store.get(key).onsuccess = e => resolve(e.target.result ? e.target.result.value : undefined);
+        });
+    }
+
+    async setMetadata(key, value) {
+        const item = { key, value };
+        return this._transact('app_metadata', 'readwrite', (store, resolve) => {
+            store.put(item).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
     // --- Meeting Methods ---
+    async _encryptItem(item) {
+        if (!this.encryptionKey) return item;
+        const encryptedData = await encrypt(this.encryptionKey, item);
+        // Preserve the ID for lookups, and other indexed fields
+        const payload = { id: item.id, data: encryptedData };
+        if (item.meetingId) payload.meetingId = item.meetingId;
+        if (item.originMeetingId) payload.originMeetingId = item.originMeetingId;
+
+        if (!payload.id) delete payload.id; // Allow auto-increment for new items
+        return payload;
+    }
+
+    async _decryptItem(item) {
+        if (!this.encryptionKey || !item.data) return item;
+        try {
+            return await decrypt(this.encryptionKey, item.data);
+        } catch (e) {
+            console.error(`Failed to decrypt item #${item.id}`, e);
+            return { ...item, error: 'Decryption Failed' }; // Return item with error flag
+        }
+    }
+
     async getAllMeetings() {
         return this._transact('meetings', 'readonly', (store, resolve) => {
-            store.getAll().onsuccess = e => resolve(e.target.result);
+            store.getAll().onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
     async getMeeting(id) {
         return this._transact('meetings', 'readonly', (store, resolve) => {
-            store.get(id).onsuccess = e => resolve(e.target.result);
+            store.get(id).onsuccess = async (e) => {
+                const result = e.target.result;
+                resolve(await this._decryptItem(result));
+            };
         });
     }
 
     async saveMeeting(meeting) {
         meeting.updatedAt = new Date().toISOString();
         if (!meeting.id) meeting.createdAt = new Date().toISOString();
+
+        const payload = await this._encryptItem(meeting);
+
         return this._transact('meetings', 'readwrite', (store, resolve) => {
-            store.put(meeting).onsuccess = e => resolve(e.target.result);
+            store.put(payload).onsuccess = e => resolve(e.target.result);
         });
     }
 
@@ -178,13 +233,18 @@ export default class Store {
     async getNoteBlocksForMeeting(meetingId) {
         return this._transact('noteBlocks', 'readonly', (store, resolve) => {
             const index = store.index('by_meeting');
-            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+            index.getAll(meetingId).onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
     async saveNoteBlock(noteBlock) {
+        const payload = await this._encryptItem(noteBlock);
         return this._transact('noteBlocks', 'readwrite', (store, resolve) => {
-            store.put(noteBlock).onsuccess = e => resolve(e.target.result);
+            store.put(payload).onsuccess = e => resolve(e.target.result);
         });
     }
 
@@ -209,13 +269,18 @@ export default class Store {
     async getAgendaItemsForMeeting(meetingId) {
         return this._transact('agendaItems', 'readonly', (store, resolve) => {
             const index = store.index('by_meeting');
-            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+            index.getAll(meetingId).onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
     async saveAgendaItem(item) {
+        const payload = await this._encryptItem(item);
         return this._transact('agendaItems', 'readwrite', (store, resolve) => {
-            store.put(item).onsuccess = e => resolve(e.target.result);
+            store.put(payload).onsuccess = e => resolve(e.target.result);
         });
     }
 
@@ -240,13 +305,18 @@ export default class Store {
     async getTasksForMeeting(meetingId) {
         return this._transact('tasks', 'readonly', (store, resolve) => {
             const index = store.index('by_meeting');
-            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+            index.getAll(meetingId).onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
     async saveTask(task) {
+        const payload = await this._encryptItem(task);
         return this._transact('tasks', 'readwrite', (store, resolve) => {
-            store.put(task).onsuccess = e => resolve(e.target.result);
+            store.put(payload).onsuccess = e => resolve(e.target.result);
         });
     }
 
@@ -260,13 +330,18 @@ export default class Store {
     async getAgreementsForMeeting(meetingId) {
         return this._transact('agreements', 'readonly', (store, resolve) => {
             const index = store.index('by_meeting');
-            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+            index.getAll(meetingId).onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
     async saveAgreement(agreement) {
+        const payload = await this._encryptItem(agreement);
         return this._transact('agreements', 'readwrite', (store, resolve) => {
-            store.put(agreement).onsuccess = e => resolve(e.target.result);
+            store.put(payload).onsuccess = e => resolve(e.target.result);
         });
     }
 
@@ -286,7 +361,11 @@ export default class Store {
     async getDecisionsForMeeting(meetingId) {
         return this._transact('decisions', 'readonly', (store, resolve) => {
             const index = store.index('by_meeting');
-            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+            index.getAll(meetingId).onsuccess = async (e) => {
+                const results = e.target.result;
+                const decryptedResults = await Promise.all(results.map(r => this._decryptItem(r)));
+                resolve(decryptedResults);
+            };
         });
     }
 
@@ -316,8 +395,9 @@ export default class Store {
                 newDecision.hashSelf = await sha256(canonicalString);
                 newDecision.timestamp = timestamp; // Add timestamp for reproducibility
 
-                // 3. Save the new decision
-                const addReq = decisionsStore.add(newDecision);
+                // 3. Encrypt and Save the new decision
+                const payload = await this._encryptItem(newDecision);
+                const addReq = decisionsStore.add(payload);
                 addReq.onsuccess = (addEvent) => {
                     const newDecisionId = addEvent.target.result;
 
@@ -498,5 +578,35 @@ export default class Store {
 
         // Finally, check the head of the chain
         return lastHash === meeting.hashChainHead;
+    }
+
+    async encryptAllData() {
+        if (!this.encryptionKey) throw new Error("Encryption key not set.");
+
+        const storesToEncrypt = ['meetings', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions', 'events', 'templates'];
+        const db = await this._openDB();
+        const tx = db.transaction(storesToEncrypt, 'readwrite');
+
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+
+            storesToEncrypt.forEach(storeName => {
+                const store = tx.objectStore(storeName);
+                store.openCursor().onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        const item = cursor.value;
+                        // a primitive check to avoid re-encrypting
+                        if (typeof item.data !== 'string') {
+                            this._encryptItem(item).then(payload => {
+                                cursor.update(payload);
+                            });
+                        }
+                        cursor.continue();
+                    }
+                };
+            });
+        });
     }
 }

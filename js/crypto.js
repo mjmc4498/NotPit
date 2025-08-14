@@ -60,4 +60,52 @@ async function sign(key, data) {
     return signatureArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export { sha256, deriveKey, sign };
+/**
+ * Encrypts a data object using AES-GCM.
+ * @param {CryptoKey} key The encryption key.
+ * @param {object} data The object to encrypt.
+ * @returns {Promise<string>} A promise that resolves to a string containing the IV and ciphertext, separated by a dot.
+ */
+async function encrypt(key, data) {
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV
+    const encodedData = new TextEncoder().encode(JSON.stringify(data));
+
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        encodedData
+    );
+
+    // Combine IV and ciphertext for storage, converting to a friendly format (e.g., Base64)
+    const ivString = btoa(String.fromCharCode(...iv));
+    const ciphertextString = btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
+
+    return `${ivString}.${ciphertextString}`;
+}
+
+/**
+ * Decrypts a data string using AES-GCM.
+ * @param {CryptoKey} key The decryption key.
+ * @param {string} encryptedString The string containing the IV and ciphertext.
+ * @returns {Promise<object>} A promise that resolves to the decrypted object.
+ */
+async function decrypt(key, encryptedString) {
+    const [ivString, ciphertextString] = encryptedString.split('.');
+    if (!ivString || !ciphertextString) {
+        throw new Error("Invalid encrypted data format.");
+    }
+
+    const iv = new Uint8Array(atob(ivString).split('').map(c => c.charCodeAt(0)));
+    const ciphertext = new Uint8Array(atob(ciphertextString).split('').map(c => c.charCodeAt(0)));
+
+    const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        ciphertext
+    );
+
+    return JSON.parse(new TextDecoder().decode(decryptedBuffer));
+}
+
+
+export { sha256, deriveKey, sign, encrypt, decrypt };
