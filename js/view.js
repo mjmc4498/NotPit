@@ -844,9 +844,9 @@ export default class View {
         this.confirmationModal.show();
     }
 
-    showLoading(show, message = 'Loading...') {
+    showLoading(show, message = null) {
         if (show) {
-            this.loadingMessage.textContent = message;
+            this.loadingMessage.textContent = message || this.t('loading_text');
             this.loadingOverlay.classList.remove('d-none');
         } else {
             this.loadingOverlay.classList.add('d-none');

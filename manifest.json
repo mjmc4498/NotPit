@@ -1,5 +1,5 @@
 {
-  "name": "NotPit - Meeting Notes Manager",
+  "name": "NotPit",
   "short_name": "NotPit",
   "description": "An offline-first meeting notes manager built with pure HTML, CSS, and JavaScript.",
   "start_url": "/",

@@ -1,4 +1,4 @@
-# NotPit - Gestor de Notas de Reuniones
+# NotPit
 
 NotPit es una aplicación de página única (SPA) diseñada para ser un gestor de notas de reuniones robusto, seguro y centrado en la privacidad. Funciona completamente offline y todos los datos se guardan exclusivamente en el dispositivo del usuario, garantizando que la información nunca abandone su equipo.
 
