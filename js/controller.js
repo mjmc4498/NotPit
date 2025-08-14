@@ -1,48 +1,41 @@
 // This module acts as the controller for the new layout.
 export default class Controller {
-    constructor(store, view) {
+    constructor(store, view, translator) {
         this.store = store;
         this.view = view;
+        this.t = translator;
         this.activeMeetingId = null;
+        this.currentlyViewedNote = null;
 
         // Bind view event handlers to controller methods
         this.view.bindSelectMeeting(this.handleSelectMeeting);
         this.view.bindNewMeeting(this.handleNewMeeting);
-        // Agenda
         this.view.bindAddAgendaItem(this.handleAddAgendaItem);
         this.view.bindDeleteAgendaItem(this.handleDeleteAgendaItem);
         this.view.bindDragAndDropAgenda(this.handleUpdateAgendaOrder);
-        // Notas
         this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
-        // Tareas
         this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
-        // Export
         this.view.bindExportEvents(this.handleExportWorkspace, this.handleExportSingleMeetingJSON, this.handleExportTasksCSV, this.handleExportMarkdown);
 
-        // Initial display
         this.showMeetingsInSidebar();
         this.view.showEmptyView();
     }
 
     // --- Core Render/Refresh Logic ---
-
     async showMeetingsInSidebar() {
         const meetings = await this.store.getAllMeetings();
         this.view.displayMeetingsInSidebar(meetings, this.activeMeetingId);
     }
-
     async refreshAgendaView() {
         if (!this.activeMeetingId) return;
         const items = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
         this.view.renderAgenda(items);
     }
-
     async refreshNotesView() {
         if (!this.activeMeetingId) return;
         const items = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
         this.view.renderNotes(items);
     }
-
     async refreshTasksView() {
         if (!this.activeMeetingId) return;
         const items = await this.store.getTasksForMeeting(this.activeMeetingId);
@@ -50,16 +43,13 @@ export default class Controller {
     }
 
     // --- Meeting Handlers ---
-
     handleSelectMeeting = async (id) => {
         if (this.activeMeetingId === id) return;
         this.activeMeetingId = id;
         await this.showMeetingsInSidebar();
-
         const meeting = await this.store.getMeeting(id);
         if (meeting) {
             this.view.showMeetingDetailView(meeting);
-            // Render content for all tabs
             this.refreshAgendaView();
             this.refreshNotesView();
             this.refreshTasksView();
@@ -71,7 +61,7 @@ export default class Controller {
 
     handleNewMeeting = async () => {
         const newMeeting = {
-            título: "New Meeting",
+            título: this.t('new_meeting_title_default'), // A key for "New Meeting"
             fechaInicio: new Date().toISOString(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -85,7 +75,6 @@ export default class Controller {
     }
 
     // --- Agenda Handlers ---
-
     handleAddAgendaItem = async (title) => {
         if (!this.activeMeetingId) return;
         const items = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
@@ -101,7 +90,7 @@ export default class Controller {
     }
 
     handleDeleteAgendaItem = async (id) => {
-        if (confirm('Are you sure you want to delete this agenda item?')) {
+        if (confirm(this.t('confirm_delete_agenda_item'))) {
             await this.store.deleteAgendaItem(id);
             await this.refreshAgendaView();
         }
@@ -117,13 +106,12 @@ export default class Controller {
     }
 
     // --- Note Block Handlers ---
-
     handleAddNoteBlock = async () => {
         if (!this.activeMeetingId) return;
         const newNoteBlock = {
             meetingId: this.activeMeetingId,
             tipo: 'texto',
-            contenido: 'New note...'
+            contenido: this.t('new_note_content_default') // A key for "New note..."
         };
         await this.store.saveNoteBlock(newNoteBlock);
         await this.refreshNotesView();
@@ -135,19 +123,18 @@ export default class Controller {
         if (noteBlockToSave) {
             noteBlockToSave.contenido = content;
             await this.store.saveNoteBlock(noteBlockToSave);
-            alert('Note saved!');
+            alert(this.t('note_saved_success'));
         }
     }
 
     handleDeleteNoteBlock = async (id) => {
-        if (confirm('Are you sure you want to delete this note block?')) {
+        if (confirm(this.t('confirm_delete_note_block'))) {
             await this.store.deleteNoteBlock(id);
             await this.refreshNotesView();
         }
     }
 
     // --- Task Handlers ---
-
     handleAddTask = async (description, priority) => {
         if (!this.activeMeetingId) return;
         const newTask = {
@@ -171,14 +158,13 @@ export default class Controller {
     };
 
     handleDeleteTask = async (id) => {
-        if (confirm('Are you sure you want to delete this task?')) {
+        if (confirm(this.t('confirm_delete_task'))) {
             await this.store.deleteTask(id);
             await this.refreshTasksView();
         }
     };
 
     // --- Import/Export Handlers ---
-
     _downloadFile(filename, data, type = 'application/json') {
         const blob = new Blob([data], { type });
         const url = URL.createObjectURL(blob);
@@ -198,13 +184,13 @@ export default class Controller {
             this._downloadFile(filename, JSON.stringify(workspaceData, null, 2));
         } catch (error) {
             console.error('Workspace export failed:', error);
-            alert('Failed to export workspace.');
+            alert(this.t('workspace_export_fail'));
         }
     }
 
     handleExportSingleMeetingJSON = async () => {
         if (!this.activeMeetingId) {
-            alert('Please select a meeting to export.');
+            alert(this.t('export_meeting_select_prompt'));
             return;
         }
         try {
@@ -212,49 +198,38 @@ export default class Controller {
             const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
             const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
             const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
-            // In a real app, we'd fetch participants, agreements, etc. too
-
-            const bundledData = {
-                meeting,
-                agendaItems,
-                noteBlocks,
-                tasks,
-            };
-
+            const bundledData = { meeting, agendaItems, noteBlocks, tasks };
             const filename = `notpit-meeting-${meeting.id}-${new Date().toISOString().split('T')[0]}.json`;
             this._downloadFile(filename, JSON.stringify(bundledData, null, 2));
-
         } catch (error) {
             console.error('Meeting export failed:', error);
-            alert('Failed to export meeting.');
+            alert(this.t('meeting_export_fail'));
         }
     }
 
     _convertToCSV(data) {
         if (data.length === 0) return '';
         const headers = Object.keys(data[0]);
-        const rows = data.map(row =>
-            headers.map(header => {
-                let cell = row[header] === null || row[header] === undefined ? '' : row[header];
-                cell = String(cell);
-                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
-                    cell = `"${cell.replace(/"/g, '""')}"`;
-                }
-                return cell;
-            }).join(',')
-        );
+        const rows = data.map(row => headers.map(header => {
+            let cell = row[header] === null || row[header] === undefined ? '' : row[header];
+            cell = String(cell);
+            if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                cell = `"${cell.replace(/"/g, '""')}"`;
+            }
+            return cell;
+        }).join(','));
         return [headers.join(','), ...rows].join('\n');
     }
 
     handleExportTasksCSV = async () => {
         if (!this.activeMeetingId) {
-            alert('Please select a meeting to export tasks from.');
+            alert(this.t('export_tasks_select_prompt'));
             return;
         }
         try {
             const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
             if (tasks.length === 0) {
-                alert('No tasks to export.');
+                alert(this.t('export_no_tasks'));
                 return;
             }
             const csvData = this._convertToCSV(tasks);
@@ -262,12 +237,11 @@ export default class Controller {
             this._downloadFile(filename, csvData, 'text/csv;charset=utf-8;');
         } catch (error) {
             console.error('CSV export failed:', error);
-            alert('Failed to export tasks as CSV.');
+            alert(this.t('csv_export_fail'));
         }
     }
 
     _generateYAMLFrontMatter(meeting) {
-        // A simple YAML generator
         const metadata = {
             title: meeting.título,
             date: meeting.fechaInicio,
@@ -279,43 +253,39 @@ export default class Controller {
     }
 
     _generateMarkdownBody(meeting, agenda, notes, tasks) {
-        let body = `# Meeting: ${meeting.título}\n\n`;
-
-        body += '## Agenda\n';
+        let body = `# ${this.t('meeting_header', { title: meeting.título })}\n\n`;
+        body += `## ${this.t('agenda_header')}\n`;
         if (agenda.length > 0) {
             agenda.sort((a,b) => a.order - b.order).forEach(item => {
                 body += `- ${item.título}\n`;
             });
         } else {
-            body += 'No agenda items.\n';
+            body += `${this.t('no_agenda_items')}\n`;
         }
         body += '\n';
-
-        body += '## Notes\n';
+        body += `## ${this.t('notes_header')}\n`;
         if (notes.length > 0) {
             notes.forEach(item => {
                 body += `### ${item.tipo}\n${item.contenido}\n\n`;
             });
         } else {
-            body += 'No notes taken.\n';
+            body += `${this.t('no_notes_yet')}\n`;
         }
         body += '\n';
-
-        body += '## Tasks\n';
+        body += `## ${this.t('tasks_header')}\n`;
         if (tasks.length > 0) {
             tasks.forEach(task => {
                 body += `- [${task.estado === 'Done' ? 'x' : ' '}] ${task.descripción} (Priority: ${task.prioridad})\n`;
             });
         } else {
-            body += 'No tasks assigned.\n';
+            body += `${this.t('no_tasks_yet')}\n`;
         }
-
         return body;
     }
 
     handleExportMarkdown = async () => {
         if (!this.activeMeetingId) {
-            alert('Please select a meeting to export.');
+            alert(this.t('export_meeting_select_prompt'));
             return;
         }
         try {
@@ -323,17 +293,14 @@ export default class Controller {
             const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
             const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
             const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
-
             const yaml = this._generateYAMLFrontMatter(meeting);
             const body = this._generateMarkdownBody(meeting, agendaItems, noteBlocks, tasks);
             const markdownContent = yaml + body;
-
             const filename = `notpit-meeting-${meeting.id}-${new Date().toISOString().split('T')[0]}.md`;
             this._downloadFile(filename, markdownContent, 'text/markdown;charset=utf-8;');
-
         } catch (error) {
             console.error('Markdown export failed:', error);
-            alert('Failed to export as Markdown.');
+            alert(this.t('markdown_export_fail'));
         }
     }
 }
