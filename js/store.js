@@ -153,7 +153,19 @@ export default class Store {
         });
     }
 
-    async saveNoteBlocks(noteBlocks) {
+    async saveNoteBlock(noteBlock) {
+        return this._transact('noteBlocks', 'readwrite', (store, resolve) => {
+            store.put(noteBlock).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async deleteNoteBlock(id) {
+        return this._transact('noteBlocks', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
+
+    async saveAllNoteBlocks(noteBlocks) {
         const db = await this._openDB();
         return new Promise((resolve, reject) => {
             const transaction = db.transaction('noteBlocks', 'readwrite');
@@ -161,6 +173,37 @@ export default class Store {
             noteBlocks.forEach(nb => store.put(nb));
             transaction.oncomplete = () => resolve();
             transaction.onerror = e => reject(`Transaction error: ${e.target.errorCode}`);
+        });
+    }
+
+    // --- Agenda Item Methods ---
+    async getAgendaItemsForMeeting(meetingId) {
+        return this._transact('agendaItems', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async saveAgendaItem(item) {
+        return this._transact('agendaItems', 'readwrite', (store, resolve) => {
+            store.put(item).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async deleteAgendaItem(id) {
+        return this._transact('agendaItems', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
+
+    async saveAgendaOrder(items) {
+        const db = await this._openDB();
+        const transaction = db.transaction('agendaItems', 'readwrite');
+        const store = transaction.objectStore('agendaItems');
+        items.forEach(item => store.put(item));
+        return new Promise((resolve, reject) => {
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = e => reject(e);
         });
     }
 

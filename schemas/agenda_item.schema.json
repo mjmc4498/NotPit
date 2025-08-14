@@ -26,7 +26,11 @@
       "type": "string",
       "enum": ["pendiente", "en curso", "hecho"],
       "default": "pendiente"
+    },
+    "order": {
+      "type": "integer",
+      "description": "The display order of the item in the agenda list."
     }
   },
-  "required": ["meetingId", "título", "estado"]
+  "required": ["meetingId", "título", "estado", "order"]
 }

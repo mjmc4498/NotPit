@@ -1,13 +1,54 @@
 /* General Body Styles */
+html, body {
+    height: 100%;
+    overflow: hidden; /* Prevent body scrolling */
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
-    background-color: #f4f4f4;
     color: #333;
-    margin: 0;
-    padding: 20px;
 }
 
+/* New Layout Styles */
+.sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.main-content {
+    height: 100vh;
+}
+
+.sidebar-header, .sidebar-footer {
+    flex-shrink: 0;
+}
+
+#meetings-sidebar-list {
+    flex-grow: 1;
+}
+
+/* Custom styles for sidebar list items */
+#meetings-sidebar-list .list-group-item {
+    cursor: pointer;
+}
+
+#meetings-sidebar-list .list-group-item:hover {
+    background-color: #e9ecef;
+}
+
+#meetings-sidebar-list .list-group-item.active {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+
+/* Print styles for presentation mode will be added later */
+/* For now, let's keep the old print styles for the summary modal if we re-add it */
 @media print {
   body.printing-summary > :not(.modal-open) {
     display: none;

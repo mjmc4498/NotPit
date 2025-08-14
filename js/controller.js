@@ -1,148 +1,175 @@
-// This module acts as the controller.
+// This module acts as the controller for the new layout.
 export default class Controller {
     constructor(store, view) {
         this.store = store;
         this.view = view;
-        this.currentlyViewedNote = null; // This will hold meeting and note blocks
+        this.activeMeetingId = null;
 
         // Bind view event handlers to controller methods
-        this.view.bindAddOrUpdateMeeting(this.handleAddOrUpdateMeeting);
-        this.view.bindCancelEdit(this.handleCancelEdit);
-        this.view.bindNotesListEvents(this.handleViewMeeting, this.handleDeleteMeeting, this.handleShowSummary);
-        this.view.bindAttachmentEvents(this.handleRemoveAttachment);
-        this.view.bindImport(this.handleImport);
-        this.view.bindExport(this.handleExport);
-        this.view.bindSummaryModalEvents(this.handleCopySummary, this.handlePrintSummary);
+        this.view.bindSelectMeeting(this.handleSelectMeeting);
+        this.view.bindNewMeeting(this.handleNewMeeting);
+        this.view.bindAddAgendaItem(this.handleAddAgendaItem);
+        this.view.bindDeleteAgendaItem(this.handleDeleteAgendaItem);
+        this.view.bindDragAndDropAgenda(this.handleUpdateAgendaOrder);
+        this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
 
         // Initial display
-        this.showAllMeetings();
+        this.showMeetingsInSidebar();
+        this.view.showEmptyView();
     }
 
-    async showAllMeetings() {
+    /**
+     * Fetches all meetings and displays them in the sidebar.
+     */
+    async showMeetingsInSidebar() {
         const meetings = await this.store.getAllMeetings();
-        this.view.displayMeetings(meetings);
+        this.view.displayMeetingsInSidebar(meetings, this.activeMeetingId);
     }
 
-    _readFileAsBase64(file) {
-        return new Promise((resolve, reject) => {
-            if (file.size > 2 * 1024 * 1024) {
-                return reject(new Error(`File ${file.name} is too large (max 2MB).`));
-            }
-            const reader = new FileReader();
-            reader.onload = () => resolve({
-                filename: file.name,
-                filetype: file.type,
-                data: reader.result
-            });
-            reader.onerror = (error) => reject(error);
-            reader.readAsDataURL(file);
-        });
-    }
+    /**
+     * Handles the selection of a meeting from the sidebar.
+     * @param {number} id - The ID of the selected meeting.
+     */
+    handleSelectMeeting = async (id) => {
+        if (this.activeMeetingId === id) return; // Do nothing if already selected
 
-    handleAddOrUpdateMeeting = async () => {
-        this.view.setSaveButtonState(true);
-        try {
-            const { meetingData, noteBlocks } = this.view.getMeetingData();
-            const newAttachments = this.view.getNewAttachments();
+        this.activeMeetingId = id;
 
-            const newlyReadAttachments = await Promise.all(newAttachments.map(this._readFileAsBase64));
-            meetingData.adjuntos.push(...newlyReadAttachments);
+        // Re-render sidebar to highlight the new active item
+        await this.showMeetingsInSidebar();
 
-            // Save the main meeting object first to get an ID
-            const savedMeetingId = await this.store.saveMeeting(meetingData);
-
-            // Now, associate and save the note blocks
-            const finalNoteBlocks = noteBlocks.map(nb => ({
-                ...nb,
-                meetingId: savedMeetingId
-            }));
-            await this.store.saveNoteBlocks(finalNoteBlocks);
-
-            this.view.resetForm();
-            await this.showAllMeetings();
-        } catch (error) {
-            alert(`Error: ${error.message}`);
-        } finally {
-            this.view.setSaveButtonState(false);
-        }
-    }
-
-    handleCancelEdit = () => {
-        this.view.resetForm();
-    }
-
-    handleViewMeeting = async (id) => {
         const meeting = await this.store.getMeeting(id);
-        const noteBlocks = await this.store.getNoteBlocksForMeeting(id);
         if (meeting) {
-            this.view.populateForm(meeting, noteBlocks);
+            this.view.showMeetingDetailView(meeting);
+            // Render content for all relevant tabs
+            const agendaItems = await this.store.getAgendaItemsForMeeting(id);
+            this.view.renderAgenda(agendaItems);
+            const noteBlocks = await this.store.getNoteBlocksForMeeting(id);
+            this.view.renderNotes(noteBlocks);
+        } else {
+            this.activeMeetingId = null;
+            this.view.showEmptyView();
         }
     }
 
-    handleDeleteMeeting = async (id) => {
-        const meeting = await this.store.getMeeting(id);
-        if (confirm(`Are you sure you want to delete the meeting "${meeting.título}"?`)) {
-            await this.store.deleteMeeting(id);
-            // In a real app, we'd also delete related note blocks, tasks, etc.
-            if (Number(this.view.getEditingId()) === id) {
-                this.view.resetForm();
-            }
-            await this.showAllMeetings();
+    /**
+     * Handles the creation of a new meeting.
+     */
+    handleNewMeeting = async () => {
+        const newMeeting = {
+            título: "New Meeting",
+            fechaInicio: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            // All other properties will have default empty values
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            ubicación: '', virtualLink: '', etiquetas: [], participantes: [],
+            agenda: [], tareas: [], acuerdos: [], decisiones: [],
+            adjuntos: [], hashChainHead: null
+        };
+
+        const newId = await this.store.saveMeeting(newMeeting);
+        this.activeMeetingId = newId;
+
+        await this.showMeetingsInSidebar();
+
+        const freshMeeting = await this.store.getMeeting(newId);
+        this.view.showMeetingDetailView(freshMeeting);
+
+        // In a real app, we might want to immediately focus the title field for editing.
+    }
+
+    /**
+     * Refreshes the agenda view for the currently active meeting.
+     */
+    refreshAgendaView = async () => {
+        if (this.activeMeetingId) {
+            const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
+            this.view.renderAgenda(agendaItems);
         }
     }
 
-    handleRemoveAttachment = () => {
-        this.view.renderCurrentAttachments();
+    /**
+     * Handles adding a new agenda item.
+     * @param {string} title - The title of the new agenda item.
+     */
+    handleAddAgendaItem = async (title) => {
+        if (!this.activeMeetingId) return;
+
+        const items = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
+        const newOrder = items.length > 0 ? Math.max(...items.map(i => i.order)) + 1 : 0;
+
+        const newItem = {
+            meetingId: this.activeMeetingId,
+            título: title,
+            estado: 'pendiente',
+            order: newOrder,
+        };
+
+        await this.store.saveAgendaItem(newItem);
+        await this.refreshAgendaView();
     }
 
-    handleShowSummary = async (id) => {
-        const meeting = await this.store.getMeeting(id);
-        const noteBlocks = await this.store.getNoteBlocksForMeeting(id);
-        this.currentlyViewedNote = { meeting, noteBlocks };
-        if (meeting) {
-            this.view.displaySummaryModal(meeting, noteBlocks);
+    /**
+     * Handles deleting an agenda item.
+     * @param {number} id - The ID of the agenda item to delete.
+     */
+    handleDeleteAgendaItem = async (id) => {
+        if (confirm('Are you sure you want to delete this agenda item?')) {
+            await this.store.deleteAgendaItem(id);
+            await this.refreshAgendaView();
         }
     }
 
-    handleCopySummary = () => {
-        if (!this.currentlyViewedNote) return;
+    /**
+     * Handles the reordering of agenda items after a drag-and-drop operation.
+     * @param {Array<{id: number, order: number}>} reorderedData - An array of objects with id and new order.
+     */
+    handleUpdateAgendaOrder = async (reorderedData) => {
+        const fullItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
 
-        const { meeting, noteBlocks } = this.currentlyViewedNote;
-        let plainTextSummary = `Meeting Minutes: ${meeting.título}\nDate: ${new Date(meeting.fechaInicio).toLocaleString()}\n\n`;
-
-        noteBlocks.forEach(nb => {
-            plainTextSummary += `--- ${nb.tipo.toUpperCase()} ---\n${nb.contenido}\n\n`;
+        const itemsToSave = fullItems.map(item => {
+            const reorderedItem = reorderedData.find(d => d.id === item.id);
+            return { ...item, order: reorderedItem ? reorderedItem.order : item.order };
         });
 
-        if (meeting.adjuntos && meeting.adjuntos.length > 0) {
-            plainTextSummary += '--- ATTACHMENTS ---\n' + meeting.adjuntos.map(f => f.filename).join('\n');
+        await this.store.saveAgendaOrder(itemsToSave);
+    }
+
+    // --- Note Block Handlers ---
+
+    refreshNotesView = async () => {
+        if (this.activeMeetingId) {
+            const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
+            this.view.renderNotes(noteBlocks);
         }
-
-        navigator.clipboard.writeText(plainTextSummary).then(() => {
-            alert('Summary copied to clipboard!');
-        }).catch(err => alert('Failed to copy summary.'));
     }
 
-    handlePrintSummary = () => {
-        // The view handles this.
+    handleAddNoteBlock = async () => {
+        if (!this.activeMeetingId) return;
+        const newNoteBlock = {
+            meetingId: this.activeMeetingId,
+            tipo: 'texto',
+            contenido: 'New note...'
+        };
+        await this.store.saveNoteBlock(newNoteBlock);
+        await this.refreshNotesView();
     }
 
-    handleExport = async () => {
-        // This is now more complex. For now, just export the meetings table.
-        alert("Exporting just the meetings list for now. A full export would require bundling all related data.");
-        const meetings = await this.store.getAllMeetings();
-        const dataStr = JSON.stringify(meetings, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `notpit-meetings-backup-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
+    handleSaveNoteBlock = async (id, content) => {
+        const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
+        const noteBlockToSave = noteBlocks.find(nb => nb.id === id);
+        if (noteBlockToSave) {
+            noteBlockToSave.contenido = content;
+            await this.store.saveNoteBlock(noteBlockToSave);
+            alert('Note saved!');
+        }
     }
 
-    handleImport = (file) => {
-        alert("Import is disabled for this version due to the new data model complexity.");
-        // The logic would need to parse a complex JSON and populate multiple stores.
+    handleDeleteNoteBlock = async (id) => {
+        if (confirm('Are you sure you want to delete this note block?')) {
+            await this.store.deleteNoteBlock(id);
+            await this.refreshNotesView();
+        }
     }
 }
