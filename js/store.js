@@ -294,4 +294,82 @@ export default class Store {
             });
         });
     }
+
+    async importData(data) {
+        const db = await this._openDB();
+        const isWorkspace = data.meetings && Array.isArray(data.meetings);
+        const isSingleMeeting = data.meeting && typeof data.meeting === 'object';
+
+        if (isWorkspace) {
+            // Full workspace import
+            const storeNames = Object.keys(data);
+            const transaction = db.transaction(storeNames, 'readwrite');
+            transaction.onerror = e => Promise.reject(e);
+
+            const clearPromises = storeNames.map(name => {
+                return new Promise((resolve, reject) => {
+                    const store = transaction.objectStore(name);
+                    store.clear().onsuccess = resolve;
+                });
+            });
+
+            await Promise.all(clearPromises);
+
+            const addPromises = storeNames.flatMap(name =>
+                data[name].map(item =>
+                    new Promise((resolve, reject) => {
+                        // We don't want to keep the old primary key
+                        delete item.id;
+                        transaction.objectStore(name).add(item).onsuccess = resolve;
+                    })
+                )
+            );
+            await Promise.all(addPromises);
+
+        } else if (isSingleMeeting) {
+            // Single meeting import
+            const storeNames = ['meetings', 'agendaItems', 'noteBlocks', 'tasks']; // and others if they exist
+            const transaction = db.transaction(storeNames, 'readwrite');
+            transaction.onerror = e => Promise.reject(e);
+
+            return new Promise((resolve, reject) => {
+                const meetingData = data.meeting;
+                const oldMeetingId = meetingData.id;
+                delete meetingData.id; // Let IndexedDB generate a new ID
+
+                const addMeetingReq = transaction.objectStore('meetings').add(meetingData);
+
+                addMeetingReq.onsuccess = (event) => {
+                    const newMeetingId = event.target.result;
+                    const itemPromises = [];
+
+                    // Helper to add items and update their meeting ID
+                    const addItems = (storeName, items) => {
+                        if (data[storeName] && Array.isArray(data[storeName])) {
+                            data[storeName].forEach(item => {
+                                delete item.id;
+                                // This is the crucial part: update the foreign key
+                                if (item.meetingId !== undefined) item.meetingId = newMeetingId;
+                                if (item.originMeetingId !== undefined) item.originMeetingId = newMeetingId;
+
+                                itemPromises.push(new Promise(res => {
+                                    transaction.objectStore(storeName).add(item).onsuccess = res;
+                                }));
+                            });
+                        }
+                    };
+
+                    addItems('agendaItems', data.agendaItems);
+                    addItems('noteBlocks', data.noteBlocks);
+                    addItems('tasks', data.tasks);
+                    // ... add other entities like agreements, decisions if they are in the export
+
+                    Promise.all(itemPromises).then(resolve).catch(reject);
+                };
+                addMeetingReq.onerror = reject;
+            });
+        } else {
+            return Promise.reject(new Error("Invalid import data format."));
+        }
+    }
 }

@@ -19,6 +19,8 @@ export default class View {
         this.exportMeetingJsonBtn = document.getElementById('export-meeting-json-btn');
         this.exportMeetingMdBtn = document.getElementById('export-meeting-md-btn');
         this.exportTasksCsvBtn = document.getElementById('export-tasks-csv-btn');
+        this.copyTasksCsvBtn = document.getElementById('copy-tasks-csv-btn');
+        this.shareBtn = document.getElementById('share-btn');
 
         // Tab Panes
         this.agendaPane = document.getElementById('agenda-pane');
@@ -325,6 +327,18 @@ export default class View {
         this.exportMeetingJsonBtn.addEventListener('click', meetingJsonHandler);
         this.exportTasksCsvBtn.addEventListener('click', tasksCsvHandler);
         this.exportMeetingMdBtn.addEventListener('click', markdownHandler);
+    }
+
+    bindImportEvents(handler) {
+        this.importBtn.addEventListener('click', () => {
+            this.importFileInput.click();
+        });
+        this.importFileInput.addEventListener('change', handler);
+    }
+
+    bindSharingEvents(shareHandler, copyCsvHandler) {
+        this.shareBtn.addEventListener('click', shareHandler);
+        this.copyTasksCsvBtn.addEventListener('click', copyCsvHandler);
     }
 
     showNewMeetingModal(templates) {

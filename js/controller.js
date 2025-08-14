@@ -21,6 +21,10 @@ export default class Controller {
         this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
         // Export
         this.view.bindExportEvents(this.handleExportWorkspace, this.handleExportSingleMeetingJSON, this.handleExportTasksCSV, this.handleExportMarkdown);
+        // Sharing
+        this.view.bindSharingEvents(this.handleShare, this.handleCopyTasksCSV);
+        // Import
+        this.view.bindImportEvents(this.handleImport);
 
         this.showMeetingsInSidebar();
         this.view.showEmptyView();
@@ -352,5 +356,110 @@ export default class Controller {
             console.error('Markdown export failed:', error);
             alert(this.t('markdown_export_fail'));
         }
+    }
+
+    // --- Sharing Handlers ---
+    handleShare = async () => {
+        if (!this.activeMeetingId) {
+            alert(this.t('export_meeting_select_prompt'));
+            return;
+        }
+
+        if (!navigator.share) {
+            alert(this.t('web_share_api_not_supported'));
+            return;
+        }
+
+        try {
+            const meeting = await this.store.getMeeting(this.activeMeetingId);
+            const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+            const doneTasks = tasks.filter(t => t.estado === 'Done').length;
+            const totalTasks = tasks.length;
+
+            const shareData = {
+                title: `NotPit Meeting: ${meeting.título}`,
+                text: `Summary for "${meeting.título}" held on ${new Date(meeting.fechaInicio).toLocaleDateString()}.\n` +
+                      `Tasks: ${doneTasks}/${totalTasks} completed.`,
+                url: window.location.href // Shares the app URL
+            };
+
+            await navigator.share(shareData);
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'MEETING_SHARED', details: { method: 'WebShareAPI' } });
+
+        } catch (error) {
+            // Don't alert on AbortError, which happens if the user cancels the share.
+            if (error.name !== 'AbortError') {
+                console.error('Share failed:', error);
+                alert(this.t('share_failed'));
+            }
+        }
+    }
+
+    handleCopyTasksCSV = async () => {
+        if (!this.activeMeetingId) {
+            alert(this.t('export_tasks_select_prompt'));
+            return;
+        }
+
+        if (!navigator.clipboard) {
+            alert(this.t('clipboard_api_not_supported'));
+            return;
+        }
+
+        try {
+            const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+            if (tasks.length === 0) {
+                alert(this.t('export_no_tasks'));
+                return;
+            }
+            const csvData = this._convertToCSV(tasks);
+            await navigator.clipboard.writeText(csvData);
+            alert(this.t('csv_copied_success'));
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASKS_COPIED', details: { format: 'CSV' } });
+
+        } catch (error) {
+            console.error('Copy to clipboard failed:', error);
+            alert(this.t('copy_failed'));
+        }
+    }
+
+    // --- Import Handler ---
+    handleImport = (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                // Simple validation to check if it's a known format
+                const isWorkspace = data.meetings && data.tasks && data.agendaItems;
+                const isSingleMeeting = data.meeting && data.tasks && data.agendaItems;
+
+                if (!isWorkspace && !isSingleMeeting) {
+                    throw new Error(this.t('import_invalid_format'));
+                }
+
+                const confirmImport = confirm(this.t(isWorkspace ? 'import_confirm_workspace' : 'import_confirm_single'));
+                if (confirmImport) {
+                    await this.store.importData(data);
+                    alert(this.t('import_success'));
+                    await this.showMeetingsInSidebar(); // Refresh the view
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert(`${this.t('import_fail')}: ${error.message}`);
+            } finally {
+                // Reset the file input so the user can select the same file again
+                event.target.value = '';
+            }
+        };
+        reader.onerror = () => {
+            alert(this.t('import_file_read_error'));
+            event.target.value = '';
+        };
+        reader.readAsText(file);
     }
 }
