@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agenda Item",
+  "description": "Schema for an item on the meeting agenda.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "meetingId": {
+      "type": "integer",
+      "description": "The ID of the meeting this agenda item belongs to."
+    },
+    "título": {
+      "type": "string"
+    },
+    "ownerId": {
+      "type": "integer",
+      "description": "The ID of the participant who owns this agenda item."
+    },
+    "duraciónPrevista": {
+      "type": "integer",
+      "description": "The estimated duration of the agenda item in minutes."
+    },
+    "estado": {
+      "type": "string",
+      "enum": ["pendiente", "en curso", "hecho"],
+      "default": "pendiente"
+    }
+  },
+  "required": ["meetingId", "título", "estado"]
+}

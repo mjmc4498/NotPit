@@ -1,127 +1,168 @@
-// This module will manage all application data using IndexedDB.
+// This module manages all application data using IndexedDB.
 export default class Store {
-    constructor(dbName = 'NotPitDB', storeName = 'notes') {
+    constructor(dbName = 'NotPitDB') {
         this.dbName = dbName;
-        this.storeName = storeName;
+        this.db = null;
     }
 
     /**
      * Opens and initializes the IndexedDB database.
      * @private
-     * @returns {Promise<IDBDatabase>} A promise that resolves with the database object.
      */
-    _openDB() {
+    async _openDB() {
+        if (this.db) {
+            return Promise.resolve(this.db);
+        }
+
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 1);
+            const request = indexedDB.open(this.dbName, 2);
 
             request.onupgradeneeded = event => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'id', autoIncrement: true });
+                const oldVersion = event.oldVersion;
+                const transaction = event.target.transaction;
+
+                if (oldVersion < 2) {
+                    // --- Create New Schema ---
+                    const stores = [
+                        { name: 'meetings', keyPath: 'id', autoIncrement: true },
+                        { name: 'participants', keyPath: 'id', autoIncrement: true },
+                        { name: 'agendaItems', keyPath: 'id', autoIncrement: true },
+                        { name: 'noteBlocks', keyPath: 'id', autoIncrement: true },
+                        { name: 'tasks', keyPath: 'id', autoIncrement: true },
+                        { name: 'agreements', keyPath: 'id', autoIncrement: true },
+                        { name: 'decisions', keyPath: 'id', autoIncrement: true },
+                    ];
+                    stores.forEach(s => {
+                        if (!db.objectStoreNames.contains(s.name)) {
+                            db.createObjectStore(s.name, { keyPath: s.keyPath, autoIncrement: s.autoIncrement });
+                        }
+                    });
+
+                    const taskStore = transaction.objectStore('tasks');
+                    taskStore.createIndex('by_meeting', 'originMeetingId', { unique: false });
+                    const agendaItemStore = transaction.objectStore('agendaItems');
+                    agendaItemStore.createIndex('by_meeting', 'meetingId', { unique: false });
+                    const noteBlockStore = transaction.objectStore('noteBlocks');
+                    noteBlockStore.createIndex('by_meeting', 'meetingId', { unique: false });
+
+                    // --- Data Migration from v1 'notes' store ---
+                    if (transaction.objectStoreNames.contains('notes')) {
+                        const oldNotesStore = transaction.objectStore('notes');
+                        const newMeetingsStore = transaction.objectStore('meetings');
+                        const newNoteBlocksStore = transaction.objectStore('noteBlocks');
+
+                        oldNotesStore.openCursor().onsuccess = cursorEvent => {
+                            const cursor = cursorEvent.target.result;
+                            if (cursor) {
+                                const oldNote = cursor.value;
+                                const newMeetingData = {
+                                    título: oldNote.title,
+                                    fechaInicio: new Date(oldNote.date).toISOString(),
+                                    fechaFin: new Date(oldNote.date).toISOString(),
+                                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                                    ubicación: '', virtualLink: '', etiquetas: [], participantes: [],
+                                    agenda: [], tareas: [], acuerdos: [], decisiones: [],
+                                    adjuntos: oldNote.attachments || [],
+                                    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+                                    hashChainHead: null
+                                };
+
+                                const addMeetingRequest = newMeetingsStore.add(newMeetingData);
+                                addMeetingRequest.onsuccess = (addEvent) => {
+                                    const newMeetingId = addEvent.target.result;
+                                    const fieldsToMigrateAsNoteBlocks = [
+                                        { type: 'agenda', content: oldNote.agenda },
+                                        { type: 'notes', content: oldNote.notes },
+                                        { type: 'agreements', content: oldNote.agreements },
+                                        { type: 'decisions', content: oldNote.decisions },
+                                        { type: 'tasks', content: oldNote.tasks }
+                                    ];
+
+                                    fieldsToMigrateAsNoteBlocks.forEach(field => {
+                                        if (field.content && field.content.trim() !== '') {
+                                            newNoteBlocksStore.add({
+                                                meetingId: newMeetingId,
+                                                tipo: field.type,
+                                                contenido: field.content
+                                            });
+                                        }
+                                    });
+                                };
+                                cursor.continue();
+                            } else {
+                                console.log("Data migration from v1 to v2 complete.");
+                                db.deleteObjectStore('notes');
+                                console.log("Old 'notes' object store deleted.");
+                            }
+                        };
+                    }
                 }
             };
 
-            request.onsuccess = event => resolve(event.target.result);
+            request.onsuccess = event => {
+                this.db = event.target.result;
+                resolve(this.db);
+            };
             request.onerror = event => reject(`Database error: ${event.target.errorCode}`);
         });
     }
 
-    /**
-     * Retrieves all notes from the database.
-     * @returns {Promise<Array>} A promise that resolves with an array of note objects.
-     */
-    async getAllNotes() {
+    async _transact(storeName, mode, action) {
         const db = await this._openDB();
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readonly');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.getAll();
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = (event) => reject(`Error fetching notes: ${event.target.errorCode}`);
+            const transaction = db.transaction(storeName, mode);
+            const store = transaction.objectStore(storeName);
+            action(store, resolve, reject);
+            transaction.onerror = event => reject(`Transaction error: ${event.target.errorCode}`);
         });
     }
 
-    /**
-     * Adds a new note to the database.
-     * @param {object} note The note object to add. The 'id' property will be ignored.
-     * @returns {Promise<number>} A promise that resolves with the new note's ID.
-     */
-    async addNote(note) {
-        const db = await this._openDB();
-        // The 'id' is managed by IndexedDB, so we ensure it's not part of the object we add.
-        delete note.id;
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.add(note);
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = (event) => reject(`Error adding note: ${event.target.errorCode}`);
+    // --- Meeting Methods ---
+    async getAllMeetings() {
+        return this._transact('meetings', 'readonly', (store, resolve) => {
+            store.getAll().onsuccess = e => resolve(e.target.result);
         });
     }
 
-    /**
-     * Updates an existing note in the database.
-     * @param {object} note The note object to update. It must contain an 'id'.
-     * @returns {Promise<number>} A promise that resolves with the updated note's ID.
-     */
-    async updateNote(note) {
-        const db = await this._openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.put(note);
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = (event) => reject(`Error updating note: ${event.target.errorCode}`);
+    async getMeeting(id) {
+        return this._transact('meetings', 'readonly', (store, resolve) => {
+            store.get(id).onsuccess = e => resolve(e.target.result);
         });
     }
 
-    /**
-     * Deletes a note from the database by its ID.
-     * @param {number} id The ID of the note to delete.
-     * @returns {Promise<void>} A promise that resolves when the deletion is complete.
-     */
-    async deleteNote(id) {
-        const db = await this._openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-            const request = store.delete(id);
-
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(`Error deleting note: ${event.target.errorCode}`);
+    async saveMeeting(meeting) {
+        meeting.updatedAt = new Date().toISOString();
+        if (!meeting.id) meeting.createdAt = new Date().toISOString();
+        return this._transact('meetings', 'readwrite', (store, resolve) => {
+            store.put(meeting).onsuccess = e => resolve(e.target.result);
         });
     }
 
-    /**
-     * Imports an array of notes, overwriting any existing data.
-     * @param {Array<object>} notes The array of notes to import.
-     * @returns {Promise<void>} A promise that resolves when the import is complete.
-     */
-    async importNotes(notes) {
+    async deleteMeeting(id) {
+        return this._transact('meetings', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
+
+    // --- NoteBlock Methods ---
+    async getNoteBlocksForMeeting(meetingId) {
+        return this._transact('noteBlocks', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async saveNoteBlocks(noteBlocks) {
         const db = await this._openDB();
         return new Promise((resolve, reject) => {
-            const transaction = db.transaction(this.storeName, 'readwrite');
-            const store = transaction.objectStore(this.storeName);
-
-            // Clear existing data
-            const clearRequest = store.clear();
-
-            clearRequest.onerror = (event) => reject(`Error clearing store: ${event.target.errorCode}`);
-
-            clearRequest.onsuccess = () => {
-                // Add new data
-                notes.forEach(note => {
-                    // Ensure notes from import don't conflict with autoincrement keys if they have an 'id'
-                    delete note.id;
-                    store.add(note);
-                });
-            };
-
+            const transaction = db.transaction('noteBlocks', 'readwrite');
+            const store = transaction.objectStore('noteBlocks');
+            noteBlocks.forEach(nb => store.put(nb));
             transaction.oncomplete = () => resolve();
-            transaction.onerror = (event) => reject(`Import transaction failed: ${event.target.errorCode}`);
+            transaction.onerror = e => reject(`Transaction error: ${e.target.errorCode}`);
         });
     }
+
+    // ... other entity methods ...
 }

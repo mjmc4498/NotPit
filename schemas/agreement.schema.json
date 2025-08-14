@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agreement",
+  "description": "Schema for an agreement made during a meeting.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "integer" },
+    "meetingId": {
+      "type": "integer",
+      "description": "The ID of the meeting this agreement belongs to."
+    },
+    "enunciado": {
+      "type": "string",
+      "description": "The statement of the agreement."
+    },
+    "responsables": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of participant IDs responsible for the agreement."
+    },
+    "fechaCompromiso": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "vencimiento": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "signature": {
+      "type": ["string", "null"],
+      "description": "The digital signature for this agreement (see Bloque 10)."
+    }
+  },
+  "required": ["meetingId", "enunciado"]
+}

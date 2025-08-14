@@ -36,32 +36,32 @@ export default class View {
 
     // --- RENDER METHODS ---
 
-    displayNotes(notes) {
+    displayMeetings(meetings) {
         while (this.notesList.firstChild) {
             this.notesList.removeChild(this.notesList.firstChild);
         }
 
-        if (notes.length === 0) {
+        if (meetings.length === 0) {
             const p = document.createElement('p');
             p.className = 'text-muted';
-            p.textContent = 'No notes yet. Create one!';
+            p.textContent = 'No meetings yet. Create one!';
             this.notesList.appendChild(p);
         } else {
-            notes.forEach(note => {
-                const noteElement = document.createElement('div');
-                noteElement.className = 'card mb-3';
-                noteElement.setAttribute('data-id', note.id);
-                noteElement.innerHTML = `
+            meetings.forEach(meeting => {
+                const meetingElement = document.createElement('div');
+                meetingElement.className = 'card mb-3';
+                meetingElement.setAttribute('data-id', meeting.id);
+                meetingElement.innerHTML = `
                     <div class="card-body">
-                        <h5 class="card-title">${note.title}</h5>
-                        <h6 class="card-subtitle mb-2 text-muted">${note.date}</h6>
-                        <p class="card-text">${(note.agenda || '').substring(0, 100)}...</p>
+                        <h5 class="card-title">${meeting.título}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">${new Date(meeting.fechaInicio).toLocaleString()}</h6>
+                        <p class="card-text">Attachments: ${meeting.adjuntos ? meeting.adjuntos.length : 0}</p>
                         <button class="btn btn-sm btn-success generate-summary-btn">Summary</button>
                         <button class="btn btn-sm btn-info view-edit-btn">View/Edit</button>
                         <button class="btn btn-sm btn-danger delete-btn">Delete</button>
                     </div>
                 `;
-                this.notesList.appendChild(noteElement);
+                this.notesList.appendChild(meetingElement);
             });
         }
     }
@@ -95,26 +95,18 @@ export default class View {
         return text ? text.replace(/\n/g, '<br>') : '';
     }
 
-    displaySummaryModal(note) {
-        const summaryTitle = `Summary for: ${note.title} (${note.date})`;
+    displaySummaryModal(meeting, noteBlocks) {
+        const summaryTitle = `Summary for: ${meeting.título} (${new Date(meeting.fechaInicio).toLocaleDateString()})`;
         this.summaryModalEl.querySelector('#summaryModalLabel').textContent = summaryTitle;
 
-        const sections = [
-            { title: 'Agenda', content: note.agenda },
-            { title: 'Structured Notes', content: note.notes },
-            { title: 'Agreements', content: note.agreements },
-            { title: 'Decisions', content: note.decisions },
-            { title: 'Tasks', content: note.tasks },
-        ];
+        let htmlContent = '';
+        noteBlocks.forEach(nb => {
+            htmlContent += `<h4>${nb.tipo}</h4><p>${this._formatTextForDisplay(nb.contenido)}</p>`
+        });
 
-        let htmlContent = sections.map(section => {
-            if (!section.content) return '';
-            return `<h4>${section.title}</h4><p>${this._formatTextForDisplay(section.content)}</p>`;
-        }).join('');
-
-        if (note.attachments && note.attachments.length > 0) {
+        if (meeting.adjuntos && meeting.adjuntos.length > 0) {
             htmlContent += '<h4>Attachments</h4>';
-            const attachmentList = note.attachments.map(file => {
+            const attachmentList = meeting.adjuntos.map(file => {
                 const isImage = file.filetype.startsWith('image/');
                 const preview = isImage ? `<img src="${file.data}" alt="${file.filename}" style="max-width: 100px; max-height: 100px; display: block; margin-bottom: 5px;">` : '';
                 return `<li>${preview}<a href="${file.data}" download="${file.filename}">${file.filename}</a></li>`;
@@ -127,22 +119,31 @@ export default class View {
 
     // --- FORM HANDLING ---
 
-    getNoteData() {
-        const noteData = {
-            title: this.meetingTitle.value,
-            date: this.meetingDate.value,
-            agenda: this.meetingAgenda.value,
-            notes: this.meetingNotes.value,
-            agreements: this.meetingAgreements.value,
-            decisions: this.meetingDecisions.value,
-            tasks: this.meetingTasks.value,
-            attachments: this._temporaryNoteState.attachments || [],
+    getMeetingData() {
+        const meetingData = {
+            título: this.meetingTitle.value,
+            fechaInicio: new Date(this.meetingDate.value).toISOString(),
+            // For simplicity, we'll keep other meeting fields static for now
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            ubicación: '', virtualLink: '', etiquetas: [], participantes: [],
+            agenda: [], tareas: [], acuerdos: [], decisiones: [],
+            adjuntos: this._temporaryNoteState.attachments || [],
         };
+
+        const noteBlocks = [
+            { type: 'agenda', content: this.meetingAgenda.value },
+            { type: 'notes', content: this.meetingNotes.value },
+            { type: 'agreements', content: this.meetingAgreements.value },
+            { type: 'decisions', content: this.meetingDecisions.value },
+            { type: 'tasks', content: this.meetingTasks.value },
+        ];
+
         const editingId = this.getEditingId();
         if (editingId) {
-            noteData.id = Number(editingId);
+            meetingData.id = Number(editingId);
         }
-        return noteData;
+
+        return { meetingData, noteBlocks };
     }
 
     getEditingId() {
@@ -153,19 +154,24 @@ export default class View {
         return Array.from(this.attachmentInput.files);
     }
 
-    populateForm(note) {
-        this.meetingTitle.value = note.title;
-        this.meetingDate.value = note.date;
-        this.meetingAgenda.value = note.agenda;
-        this.meetingNotes.value = note.notes;
-        this.meetingAgreements.value = note.agreements;
-        this.meetingDecisions.value = note.decisions;
-        this.meetingTasks.value = note.tasks;
-        this.editingNoteIdInput.value = note.id;
-        this._temporaryNoteState.attachments = note.attachments || [];
+    populateForm(meeting, noteBlocks) {
+        this.resetForm();
+        this.meetingTitle.value = meeting.título;
+        this.meetingDate.value = meeting.fechaInicio.substring(0, 16); // Format for datetime-local input
+
+        noteBlocks.forEach(nb => {
+            if (nb.tipo === 'agenda') this.meetingAgenda.value = nb.contenido;
+            if (nb.tipo === 'notes') this.meetingNotes.value = nb.contenido;
+            if (nb.tipo === 'agreements') this.meetingAgreements.value = nb.contenido;
+            if (nb.tipo === 'decisions') this.meetingDecisions.value = nb.contenido;
+            if (nb.tipo === 'tasks') this.meetingTasks.value = nb.contenido;
+        });
+
+        this.editingNoteIdInput.value = meeting.id;
+        this._temporaryNoteState.attachments = meeting.adjuntos || [];
         this.renderCurrentAttachments();
 
-        this.saveBtn.textContent = 'Update Note';
+        this.saveBtn.textContent = 'Update Meeting';
         this.saveBtn.classList.remove('btn-primary');
         this.saveBtn.classList.add('btn-success');
         this.cancelEditBtn.classList.remove('d-none');
@@ -174,7 +180,7 @@ export default class View {
     resetForm() {
         this.noteForm.reset();
         this.editingNoteIdInput.value = '';
-        this.saveBtn.textContent = 'Save Note';
+        this.saveBtn.textContent = 'Save Meeting';
         this.saveBtn.classList.remove('btn-success');
         this.saveBtn.classList.add('btn-primary');
         this.cancelEditBtn.classList.add('d-none');
@@ -184,12 +190,12 @@ export default class View {
 
     setSaveButtonState(isSaving) {
         this.saveBtn.disabled = isSaving;
-        this.saveBtn.textContent = isSaving ? 'Saving...' : (this.getEditingId() ? 'Update Note' : 'Save Note');
+        this.saveBtn.textContent = isSaving ? 'Saving...' : (this.getEditingId() ? 'Update Meeting' : 'Save Meeting');
     }
 
     // --- BINDING METHODS ---
 
-    bindAddOrUpdateNote(handler) {
+    bindAddOrUpdateMeeting(handler) {
         this.noteForm.addEventListener('submit', event => {
             event.preventDefault();
             handler();
@@ -242,9 +248,7 @@ export default class View {
     }
 
     bindSummaryModalEvents(copyHandler, printHandler) {
-        this.copySummaryBtn.addEventListener('click', () => {
-            copyHandler();
-        });
+        this.copySummaryBtn.addEventListener('click', () => copyHandler());
         this.printSummaryBtn.addEventListener('click', () => {
             document.body.classList.add('printing-summary');
             window.print();

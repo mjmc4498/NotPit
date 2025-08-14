@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Task",
+  "description": "Schema for a task or action item.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "integer" },
+    "descripción": { "type": "string" },
+    "assigneeId": {
+      "type": "integer",
+      "description": "The ID of the participant assigned to this task."
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": ["L", "M", "H"]
+    },
+    "vencimiento": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "estado": {
+      "type": "string",
+      "enum": ["ToDo", "Doing", "Done"],
+      "default": "ToDo"
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "originMeetingId": {
+      "type": "integer",
+      "description": "The ID of the meeting where this task was created."
+    }
+  },
+  "required": ["descripción", "estado", "originMeetingId"]
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decision",
+  "description": "Schema for a decision made during a meeting.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "integer" },
+    "meetingId": {
+      "type": "integer",
+      "description": "The ID of the meeting this decision belongs to."
+    },
+    "statement": {
+      "type": "string",
+      "description": "The statement of the decision."
+    },
+    "opcionesConsideradas": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "criterio": {
+      "type": "string",
+      "description": "The criteria used to make the decision."
+    },
+    "ownerId": {
+      "type": "integer",
+      "description": "The ID of the participant who owns the decision."
+    },
+    "resultado": {
+      "type": "string",
+      "description": "The outcome of the decision."
+    },
+    "impacto": {
+      "type": "string",
+      "description": "The potential impact of the decision."
+    },
+    "hashPrev": {
+      "type": ["string", "null"],
+      "description": "The hash of the previous item in the decision's blockchain (see Bloque 10)."
+    },
+    "hashSelf": {
+      "type": ["string", "null"],
+      "description": "The hash of this decision object (see Bloque 10)."
+    }
+  },
+  "required": ["meetingId", "statement", "resultado"]
+}

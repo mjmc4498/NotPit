@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Meeting",
+  "description": "Schema for a meeting object. This is the central entity that links to all others.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "The unique identifier for a meeting."
+    },
+    "título": {
+      "type": "string",
+      "description": "The title of the meeting."
+    },
+    "fechaInicio": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The start date and time of the meeting in ISO 8601 format."
+    },
+    "fechaFin": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The end date and time of the meeting in ISO 8601 format."
+    },
+    "timeZone": {
+      "type": "string",
+      "description": "The IANA time zone name (e.g., 'America/New_York')."
+    },
+    "ubicación": {
+      "type": "string",
+      "description": "The physical location of the meeting."
+    },
+    "virtualLink": {
+      "type": "string",
+      "format": "uri",
+      "description": "The URL for a virtual meeting."
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "A list of tags for categorizing the meeting."
+    },
+    "participantes": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of participant IDs."
+    },
+    "agenda": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of agenda item IDs."
+    },
+    "tareas": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of task IDs."
+    },
+    "acuerdos": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of agreement IDs."
+    },
+    "decisiones": {
+      "type": "array",
+      "items": { "type": "integer" },
+      "description": "An array of decision IDs."
+    },
+    "adjuntos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filename": { "type": "string" },
+          "filetype": { "type": "string" },
+          "data": { "type": "string" }
+        },
+        "required": ["filename", "filetype", "data"]
+      },
+      "description": "An array of file attachments."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "hashChainHead": {
+      "type": ["string", "null"],
+      "description": "The hash of the latest item in the meeting's blockchain (see Bloque 10)."
+    }
+  },
+  "required": ["título", "fechaInicio", "createdAt", "updatedAt"]
+}

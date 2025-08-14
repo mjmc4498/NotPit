@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Note Block",
+  "description": "Schema for a generic block of notes taken during a meeting.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "meetingId": {
+      "type": "integer",
+      "description": "The ID of the meeting this note block belongs to."
+    },
+    "tipo": {
+      "type": "string",
+      "enum": ["texto", "lista", "decisión", "acuerdo", "riesgo"],
+      "description": "The type of note block."
+    },
+    "contenido": {
+      "type": "string",
+      "description": "The content of the note in Markdown format."
+    },
+    "referencias": {
+      "type": "object",
+      "properties": {
+        "agendaItemId": { "type": "integer" },
+        "participantId": { "type": "integer" }
+      },
+      "description": "Optional references to other entities."
+    }
+  },
+  "required": ["meetingId", "tipo", "contenido"]
+}
