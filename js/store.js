@@ -1,4 +1,6 @@
 // This module manages all application data using IndexedDB.
+import { sha256 } from './crypto.js';
+
 export default class Store {
     constructor(dbName = 'NotPitDB') {
         this.dbName = dbName;
@@ -15,23 +17,31 @@ export default class Store {
         }
 
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 4); // Version 4 for events store
+            const request = indexedDB.open(this.dbName, 5); // Version 5 for Acuerdometro
 
             request.onupgradeneeded = event => {
                 const db = event.target.result;
                 const oldVersion = event.oldVersion;
                 const transaction = event.target.transaction;
 
+                if (oldVersion < 5) {
+                    const agreementsStore = db.createObjectStore('agreements', { keyPath: 'id', autoIncrement: true });
+                    agreementsStore.createIndex('by_meeting', 'meetingId', { unique: false });
+
+                    const decisionsStore = db.createObjectStore('decisions', { keyPath: 'id', autoIncrement: true });
+                    decisionsStore.createIndex('by_meeting', 'meetingId', { unique: false });
+                }
+
+
                 if (oldVersion < 2) {
-                    // --- Create New Schema ---
+                    // This block is for migrating very old schemas.
+                    // The main object stores are now created in their respective version blocks.
                     const stores = [
                         { name: 'meetings', keyPath: 'id', autoIncrement: true },
                         { name: 'participants', keyPath: 'id', autoIncrement: true },
                         { name: 'agendaItems', keyPath: 'id', autoIncrement: true },
                         { name: 'noteBlocks', keyPath: 'id', autoIncrement: true },
                         { name: 'tasks', keyPath: 'id', autoIncrement: true },
-                        { name: 'agreements', keyPath: 'id', autoIncrement: true },
-                        { name: 'decisions', keyPath: 'id', autoIncrement: true },
                     ];
                     stores.forEach(s => {
                         if (!db.objectStoreNames.contains(s.name)) {
@@ -246,7 +256,93 @@ export default class Store {
         });
     }
 
-    // ... other entity methods ...
+    // --- Agreement Methods ---
+    async getAgreementsForMeeting(meetingId) {
+        return this._transact('agreements', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async saveAgreement(agreement) {
+        return this._transact('agreements', 'readwrite', (store, resolve) => {
+            store.put(agreement).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async getAgreement(id) {
+        return this._transact('agreements', 'readonly', (store, resolve) => {
+            store.get(id).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async deleteAgreement(id) {
+        return this._transact('agreements', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
+
+    // --- Decision Methods ---
+    async getDecisionsForMeeting(meetingId) {
+        return this._transact('decisions', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async saveDecision(decisionData) {
+        const db = await this._openDB();
+        const tx = db.transaction(['decisions', 'meetings'], 'readwrite');
+        const decisionsStore = tx.objectStore('decisions');
+        const meetingsStore = tx.objectStore('meetings');
+
+        return new Promise(async (resolve, reject) => {
+            tx.onerror = event => reject(event.target.error);
+            tx.oncomplete = () => resolve();
+
+            // 1. Find the last decision to get the previous hash
+            const cursorReq = decisionsStore.index('by_meeting').openCursor(decisionData.meetingId, 'prev');
+            let lastDecision = null;
+            cursorReq.onsuccess = async (event) => {
+                lastDecision = event.target.result ? event.target.result.value : null;
+
+                // 2. Prepare the new decision object
+                const newDecision = { ...decisionData };
+                newDecision.hashPrev = lastDecision ? lastDecision.hashSelf : null;
+
+                const timestamp = new Date().toISOString();
+                const canonicalString = `${newDecision.statement}|${newDecision.resultado}|${timestamp}|${newDecision.hashPrev}`;
+
+                newDecision.hashSelf = await sha256(canonicalString);
+                newDecision.timestamp = timestamp; // Add timestamp for reproducibility
+
+                // 3. Save the new decision
+                const addReq = decisionsStore.add(newDecision);
+                addReq.onsuccess = (addEvent) => {
+                    const newDecisionId = addEvent.target.result;
+
+                    // 4. Update the meeting's hashChainHead
+                    const getMeetingReq = meetingsStore.get(decisionData.meetingId);
+                    getMeetingReq.onsuccess = (getEvent) => {
+                        const meeting = getEvent.target.result;
+                        if (meeting) {
+                            meeting.hashChainHead = newDecision.hashSelf;
+                            meetingsStore.put(meeting); // This will resolve the transaction
+                        } else {
+                            tx.abort();
+                            reject(new Error(`Meeting with id ${decisionData.meetingId} not found.`));
+                        }
+                    };
+                };
+            };
+        });
+    }
+
+    async deleteDecision(id) {
+        return this._transact('decisions', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
 
     // --- Event Methods ---
     async logEvent(eventData) {
@@ -371,5 +467,36 @@ export default class Store {
         } else {
             return Promise.reject(new Error("Invalid import data format."));
         }
+    }
+
+    async verifyDecisionChain(meetingId) {
+        const meeting = await this.getMeeting(meetingId);
+        const decisions = await this.getDecisionsForMeeting(meetingId);
+
+        if (!decisions || decisions.length === 0) {
+            return meeting.hashChainHead === null; // Valid if no decisions and no head
+        }
+
+        // Sort decisions chronologically
+        decisions.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        let lastHash = null;
+        for (const decision of decisions) {
+            // Check if the chain is broken
+            if (decision.hashPrev !== lastHash) {
+                return false;
+            }
+            // Recalculate the hash of the current decision
+            const canonicalString = `${decision.statement}|${decision.resultado}|${decision.timestamp}|${decision.hashPrev}`;
+            const recalculatedHash = await sha256(canonicalString);
+
+            if (recalculatedHash !== decision.hashSelf) {
+                return false; // Tampered data
+            }
+            lastHash = recalculatedHash;
+        }
+
+        // Finally, check the head of the chain
+        return lastHash === meeting.hashChainHead;
     }
 }

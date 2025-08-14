@@ -41,6 +41,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 id="main-meeting-title" class="h3 mb-0"></h2>
                     <div class="btn-group">
+                        <button id="sign-meeting-btn" class="btn btn-warning btn-sm d-none" data-i18n-key="sign_close_btn">Sign & Close</button>
                         <button id="share-btn" type="button" class="btn btn-outline-secondary d-none" data-i18n-key="share_btn">Share</button>
                         <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" data-i18n-key="export_dropdown"></button>
                         <ul class="dropdown-menu dropdown-menu-end">
@@ -56,22 +57,25 @@
                 <!-- Tab Navigation -->
                 <ul class="nav nav-tabs" id="meetingTab" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="agenda-tab" data-bs-toggle="tab" data-bs-target="#agenda-pane" type="button" role="tab" aria-controls="agenda-pane" aria-selected="true" data-i18n-key="agenda_tab"></button>
+                                <button class="nav-link active" id="agenda-tab" data-bs-toggle="tab" data-bs-target="#agenda-pane" type="button" role="tab" aria-controls="agenda-pane" aria-selected="true" data-i18n-key="agenda_tab">Agenda</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="notas-tab" data-bs-toggle="tab" data-bs-target="#notas-pane" type="button" role="tab" aria-controls="notas-pane" aria-selected="false" data-i18n-key="notes_tab"></button>
+                                <button class="nav-link" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notas-pane" type="button" role="tab" aria-controls="notas-pane" aria-selected="false" data-i18n-key="notes_tab">Notas</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="acuerdos-tab" data-bs-toggle="tab" data-bs-target="#acuerdos-pane" type="button" role="tab" aria-controls="acuerdos-pane" aria-selected="false" data-i18n-key="agreements_tab"></button>
+                                <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tareas-pane" type="button" role="tab" aria-controls="tareas-pane" aria-selected="false" data-i18n-key="tasks_tab">Tareas</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="decisiones-tab" data-bs-toggle="tab" data-bs-target="#decisiones-pane" type="button" role="tab" aria-controls="decisiones-pane" aria-selected="false" data-i18n-key="decisions_tab"></button>
+                                <button class="nav-link" id="agreements-tab" data-bs-toggle="tab" data-bs-target="#agreements-pane" type="button" role="tab" aria-controls="agreements-pane" aria-selected="false" data-i18n-key="agreements_tab">Acuerdos</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="tareas-tab" data-bs-toggle="tab" data-bs-target="#tareas-pane" type="button" role="tab" aria-controls="tareas-pane" aria-selected="false" data-i18n-key="tasks_tab"></button>
+                                <button class="nav-link" id="decisions-tab" data-bs-toggle="tab" data-bs-target="#decisions-pane" type="button" role="tab" aria-controls="decisions-pane" aria-selected="false" data-i18n-key="decisions_tab">Decisiones</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="timeline-tab" data-bs-toggle="tab" data-bs-target="#timeline-pane" type="button" role="tab" aria-controls="timeline-pane" aria-selected="false" data-i18n-key="timeline_tab">Timeline</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit-pane" type="button" role="tab" aria-controls="audit-pane" aria-selected="false" data-i18n-key="audit_tab">Audit</button>
                     </li>
                 </ul>
 
@@ -79,10 +83,11 @@
                 <div class="tab-content p-3 border border-top-0" id="meetingTabContent">
                     <div class="tab-pane fade show active" id="agenda-pane" role="tabpanel" aria-labelledby="agenda-tab"></div>
                     <div class="tab-pane fade" id="notas-pane" role="tabpanel" aria-labelledby="notas-tab"></div>
-                    <div class="tab-pane fade" id="acuerdos-pane" role="tabpanel" aria-labelledby="acuerdos-tab"></div>
-                    <div class="tab-pane fade" id="decisiones-pane" role="tabpanel" aria-labelledby="decisiones-tab"></div>
-                    <div class="tab-pane fade" id="tareas-pane" role="tabpanel" aria-labelledby="tareas-tab"></div>
+                            <div class="tab-pane fade" id="tareas-pane" role="tabpanel" aria-labelledby="tasks-tab"></div>
+                            <div class="tab-pane fade" id="agreements-pane" role="tabpanel" aria-labelledby="agreements-tab"></div>
+                            <div class="tab-pane fade" id="decisions-pane" role="tabpanel" aria-labelledby="decisions-tab"></div>
                     <div class="tab-pane fade" id="timeline-pane" role="tabpanel" aria-labelledby="timeline-tab"></div>
+                    <div class="tab-pane fade" id="audit-pane" role="tabpanel" aria-labelledby="audit-tab"></div>
                 </div>
             </div>
 

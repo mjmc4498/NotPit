@@ -1,4 +1,6 @@
 // This module acts as the controller for the new layout.
+import { deriveKey, sign } from './crypto.js';
+
 export default class Controller {
     constructor(store, view, translator) {
         this.store = store;
@@ -19,10 +21,16 @@ export default class Controller {
         this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
         // Tareas
         this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
+        // Agreements & Decisions
+        this.view.bindAgreementsTabEvents(this.handleAddAgreement, this.handleDeleteAgreement, this.handleUpdateAgreement);
+        this.view.bindDecisionsTabEvents(this.handleAddDecision, this.handleDeleteDecision);
+        // Audit
+        this.view.bindAuditTabEvents(this.handleVerifyChain);
         // Export
         this.view.bindExportEvents(this.handleExportWorkspace, this.handleExportSingleMeetingJSON, this.handleExportTasksCSV, this.handleExportMarkdown);
         // Sharing
         this.view.bindSharingEvents(this.handleShare, this.handleCopyTasksCSV);
+        this.view.bindSignMeeting(this.handleSignMeeting);
         // Import
         this.view.bindImportEvents(this.handleImport);
 
@@ -51,6 +59,50 @@ export default class Controller {
         this.view.renderTasks(items);
     }
 
+    async refreshAgreementsView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getAgreementsForMeeting(this.activeMeetingId);
+        const score = this._calculateAcuerdometroScore(items);
+        this.view.renderAgreements(items);
+        this.view.updateAcuerdometroWidget(score);
+    }
+
+    _calculateAcuerdometroScore(agreements) {
+        if (!agreements || agreements.length === 0) return -1; // Special value for no agreements
+
+        const priorityWeights = { H: 3, M: 2, L: 1 };
+
+        let totalWeight = 0;
+        let fulfilledWeight = 0;
+
+        agreements.forEach(a => {
+            const weight = priorityWeights[a.priority] || 1;
+            if (a.status === 'Fulfilled') {
+                totalWeight += weight;
+                fulfilledWeight += weight;
+            } else if (a.status === 'Pending') {
+                totalWeight += weight;
+            }
+            // 'Breached' agreements are not counted in the total possible score
+        });
+
+        if (totalWeight === 0) return -1; // No pending or fulfilled agreements
+
+        return fulfilledWeight / totalWeight;
+    }
+
+    async refreshDecisionsView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getDecisionsForMeeting(this.activeMeetingId);
+        this.view.renderDecisions(items);
+    }
+
+    async refreshAuditView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getEventsForMeeting(this.activeMeetingId);
+        this.view.renderAuditView(items);
+    }
+
     async refreshTimelineView() {
         if (!this.activeMeetingId) return;
         const items = await this.store.getEventsForMeeting(this.activeMeetingId);
@@ -65,9 +117,16 @@ export default class Controller {
         const meeting = await this.store.getMeeting(id);
         if (meeting) {
             this.view.showMeetingDetailView(meeting);
+            const agreements = await this.store.getAgreementsForMeeting(id);
+            const hasUnsigned = agreements.some(a => !a.signature);
+            this.view.toggleSignButton(hasUnsigned);
+
             this.refreshAgendaView();
             this.refreshNotesView();
             this.refreshTasksView();
+            this.refreshAgreementsView();
+            this.refreshDecisionsView();
+            this.refreshAuditView();
             this.refreshTimelineView();
         } else {
             this.activeMeetingId = null;
@@ -461,5 +520,109 @@ export default class Controller {
             event.target.value = '';
         };
         reader.readAsText(file);
+    }
+
+    // --- Agreement and Decision Handlers ---
+    handleAddAgreement = async (statement, deadline, priority) => {
+        if (!this.activeMeetingId) return;
+        const newAgreement = {
+            meetingId: this.activeMeetingId,
+            statement,
+            deadline,
+            priority,
+            status: 'Pending',
+            signature: ''
+        };
+        await this.store.saveAgreement(newAgreement);
+        await this.refreshAgreementsView();
+    }
+
+    handleDeleteAgreement = async (id) => {
+        if (confirm(this.t('confirm_delete_agreement'))) {
+            await this.store.deleteAgreement(id);
+            await this.refreshAgreementsView();
+        }
+    }
+
+    handleUpdateAgreement = async (id, updatedFields) => {
+        const agreement = await this.store.getAgreement(id);
+        if (agreement) {
+            const updatedAgreement = { ...agreement, ...updatedFields };
+            await this.store.saveAgreement(updatedAgreement);
+            await this.refreshAgreementsView();
+        }
+    }
+
+    handleAddDecision = async (statement) => {
+        if (!this.activeMeetingId) return;
+        // The store will now handle all the hashing and chaining logic.
+        const decisionData = {
+            meetingId: this.activeMeetingId,
+            statement,
+            resultado: 'N/A', // Default value
+            // hashPrev and hashSelf will be calculated by the store.
+        };
+        await this.store.saveDecision(decisionData);
+        await this.refreshDecisionsView();
+    }
+
+    handleDeleteDecision = async (id) => {
+        if (confirm(this.t('confirm_delete_decision'))) { // Note: new i18n key needed
+            await this.store.deleteDecision(id);
+            await this.refreshDecisionsView();
+        }
+    }
+
+    handleSignMeeting = async () => {
+        if (!this.activeMeetingId) return;
+
+        const password = prompt(this.t('sign_meeting_prompt_password'));
+        if (!password) return;
+
+        try {
+            const meeting = await this.store.getMeeting(this.activeMeetingId);
+            let salt;
+
+            if (meeting.pbkdf2Salt) {
+                // Convert hex salt from DB back to Uint8Array
+                salt = new Uint8Array(meeting.pbkdf2Salt.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+            } else {
+                // Create and save a new salt for this meeting
+                salt = crypto.getRandomValues(new Uint8Array(16));
+                meeting.pbkdf2Salt = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+                await this.store.saveMeeting(meeting);
+            }
+
+            const key = await deriveKey(password, salt);
+            const agreements = await this.store.getAgreementsForMeeting(this.activeMeetingId);
+
+            for (const agreement of agreements) {
+                if (!agreement.signature) {
+                    const payload = `${agreement.statement}|${agreement.deadline}|${agreement.priority}|${agreement.status}`;
+                    agreement.signature = await sign(key, payload);
+                    await this.store.saveAgreement(agreement);
+                }
+            }
+
+            alert(this.t('sign_success')); // new i18n key
+            await this.refreshAgreementsView();
+            this.view.toggleSignButton(false); // Hide button immediately
+
+        } catch (error) {
+            console.error("Signing failed:", error);
+            alert(this.t('sign_fail')); // new i18n key
+        }
+    }
+
+    // --- Audit Handlers ---
+    handleVerifyChain = async () => {
+        if (!this.activeMeetingId) return;
+        try {
+            const isValid = await this.store.verifyDecisionChain(this.activeMeetingId);
+            this.view.displayChainStatus(isValid);
+        } catch (error) {
+            console.error("Chain verification failed:", error);
+            this.view.displayChainStatus(false);
+        }
     }
 }

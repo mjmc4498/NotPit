@@ -89,6 +89,10 @@
     "hashChainHead": {
       "type": ["string", "null"],
       "description": "The hash of the latest item in the meeting's blockchain (see Bloque 10)."
+    },
+    "pbkdf2Salt": {
+        "type": "string",
+        "description": "Hex-encoded salt for deriving the signing key for this meeting."
     }
   },
   "required": ["título", "fechaInicio", "createdAt", "updatedAt"]

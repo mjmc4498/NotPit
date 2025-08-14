@@ -11,6 +11,7 @@ export default class View {
         this.mainContentView = document.getElementById('meeting-content-view');
         this.emptyView = document.getElementById('empty-view');
         this.mainMeetingTitle = document.getElementById('main-meeting-title');
+        this.signMeetingBtn = document.getElementById('sign-meeting-btn');
 
         // Import/Export
         this.importBtn = document.getElementById('import-btn');
@@ -26,6 +27,9 @@ export default class View {
         this.agendaPane = document.getElementById('agenda-pane');
         this.notasPane = document.getElementById('notas-pane');
         this.tareasPane = document.getElementById('tareas-pane');
+        this.agreementsPane = document.getElementById('agreements-pane');
+        this.decisionsPane = document.getElementById('decisions-pane');
+        this.auditPane = document.getElementById('audit-pane');
         this.timelinePane = document.getElementById('timeline-pane');
 
         // New Meeting Modal
@@ -322,6 +326,51 @@ export default class View {
         });
     }
 
+    bindAgreementsTabEvents(addAgreementHandler, deleteAgreementHandler, updateAgreementHandler) {
+        this.agreementsPane.addEventListener('submit', event => {
+            if (event.target.id === 'add-agreement-form') {
+                event.preventDefault();
+                const form = event.target;
+                const statement = form.elements.statement.value;
+                const deadline = form.elements.deadline.value;
+                const priority = form.elements.priority.value;
+                if (statement && deadline) {
+                    addAgreementHandler(statement, deadline, priority);
+                    form.reset();
+                }
+            }
+        });
+        this.agreementsPane.addEventListener('click', event => {
+            if (event.target.classList.contains('delete-agreement-btn')) {
+                deleteAgreementHandler(Number(event.target.closest('.list-group-item').dataset.id));
+            }
+        });
+        this.agreementsPane.addEventListener('change', event => {
+            if (event.target.classList.contains('update-agreement-status')) {
+                const item = event.target.closest('.list-group-item');
+                updateAgreementHandler(Number(item.dataset.id), { status: event.target.value });
+            }
+        });
+    }
+
+    bindDecisionsTabEvents(addDecisionHandler, deleteDecisionHandler) {
+        this.decisionsPane.addEventListener('submit', event => {
+            if (event.target.id === 'add-decision-form') {
+                event.preventDefault();
+                const input = event.target.querySelector('input');
+                if (input.value) {
+                    addDecisionHandler(input.value);
+                    input.value = '';
+                }
+            }
+        });
+        this.decisionsPane.addEventListener('click', event => {
+            if (event.target.classList.contains('delete-decision-btn')) {
+                deleteDecisionHandler(Number(event.target.closest('.list-group-item').dataset.id));
+            }
+        });
+    }
+
     bindExportEvents(workspaceHandler, meetingJsonHandler, tasksCsvHandler, markdownHandler) {
         this.exportWorkspaceBtn.addEventListener('click', workspaceHandler);
         this.exportMeetingJsonBtn.addEventListener('click', meetingJsonHandler);
@@ -339,6 +388,57 @@ export default class View {
     bindSharingEvents(shareHandler, copyCsvHandler) {
         this.shareBtn.addEventListener('click', shareHandler);
         this.copyTasksCsvBtn.addEventListener('click', copyCsvHandler);
+    }
+
+    bindSignMeeting(handler) {
+        this.signMeetingBtn.addEventListener('click', handler);
+    }
+
+    toggleSignButton(show) {
+        if (show) {
+            this.signMeetingBtn.classList.remove('d-none');
+        } else {
+            this.signMeetingBtn.classList.add('d-none');
+        }
+    }
+
+    renderAuditView(events) {
+        this.auditPane.innerHTML = `<h4>${this.t('audit_header')}</h4>`;
+
+        const verifier = document.createElement('div');
+        verifier.className = 'mb-4 p-3 border rounded';
+        verifier.innerHTML = `
+            <h5>Decision Ledger</h5>
+            <button id="verify-chain-btn" class="btn btn-primary">${this.t('verify_chain_btn')}</button>
+            <div id="chain-status" class="mt-2"></div>
+        `;
+        this.auditPane.appendChild(verifier);
+
+        // Re-use the timeline rendering for the event log
+        const eventLog = document.createElement('div');
+        this.auditPane.appendChild(eventLog);
+        this.renderTimeline(events, eventLog);
+    }
+
+    bindAuditTabEvents(verifyHandler) {
+        this.auditPane.addEventListener('click', event => {
+            if (event.target.id === 'verify-chain-btn') {
+                verifyHandler();
+            }
+        });
+    }
+
+    displayChainStatus(isValid) {
+        const statusDiv = this.auditPane.querySelector('#chain-status');
+        if (!statusDiv) return;
+
+        if (isValid) {
+            statusDiv.className = 'alert alert-success mt-2';
+            statusDiv.textContent = this.t('chain_valid');
+        } else {
+            statusDiv.className = 'alert alert-danger mt-2';
+            statusDiv.textContent = this.t('chain_invalid');
+        }
     }
 
     showNewMeetingModal(templates) {
@@ -369,11 +469,12 @@ export default class View {
         });
     }
 
-    renderTimeline(events) {
-        this.timelinePane.innerHTML = `<h4>${this.t('timeline_tab')}</h4>`;
+    renderTimeline(events, targetElement = null) {
+        const container = targetElement || this.timelinePane;
+        container.innerHTML = `<h4>${this.t(targetElement ? 'audit_header' : 'timeline_tab')}</h4>`;
 
         if (events.length === 0) {
-            this.timelinePane.innerHTML += `<p class="text-muted">No events yet for this meeting.</p>`;
+            container.innerHTML += `<p class="text-muted">No events yet for this meeting.</p>`;
             return;
         }
 
@@ -394,6 +495,123 @@ export default class View {
             list.appendChild(item);
         });
 
-        this.timelinePane.appendChild(list);
+        container.appendChild(list);
+    }
+
+    updateAcuerdometroWidget(score) {
+        const widget = this.agreementsPane.querySelector('#acuerdometro-widget');
+        const statusSpan = this.agreementsPane.querySelector('#acuerdometro-status');
+        if (!widget || !statusSpan) return;
+
+        let colorClass = 'bg-light';
+        let statusText = '---';
+
+        if (score >= 0.8) {
+            colorClass = 'bg-success';
+            statusText = 'Excellent';
+        } else if (score >= 0.5) {
+            colorClass = 'bg-warning';
+            statusText = 'Average';
+        } else if (score >= 0) {
+            colorClass = 'bg-danger';
+            statusText = 'At Risk';
+        }
+
+        widget.className = 'mb-3 p-2 rounded text-white ' + colorClass;
+        statusSpan.textContent = `${statusText} (${(score * 100).toFixed(0)}%)`;
+    }
+
+    renderAgreements(agreements) {
+        this.agreementsPane.innerHTML = `<h4>${this.t('agreements_header')}</h4>`;
+
+        // Placeholder for Acuerdómetro widget
+        const aemetroWidget = document.createElement('div');
+        aemetroWidget.id = 'acuerdometro-widget';
+        aemetroWidget.className = 'mb-3 p-2 rounded';
+        aemetroWidget.innerHTML = `<h6>Acuerdómetro: <span id="acuerdometro-status">---</span></h6>`;
+        this.agreementsPane.appendChild(aemetroWidget);
+
+        const form = document.createElement('form');
+        form.id = 'add-agreement-form';
+        form.className = 'row g-3 mb-3';
+        form.innerHTML = `
+            <div class="col-md-6">
+                <input type="text" name="statement" class="form-control" placeholder="${this.t('new_agreement_placeholder')}" required>
+            </div>
+            <div class="col-md-3">
+                <input type="date" name="deadline" class="form-control" required>
+            </div>
+            <div class="col-md-2">
+                <select name="priority" class="form-select">
+                    <option value="L">${this.t('priority_low')}</option>
+                    <option value="M" selected>${this.t('priority_medium')}</option>
+                    <option value="H">${this.t('priority_high')}</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+            </div>
+        `;
+        this.agreementsPane.appendChild(form);
+
+        const list = document.createElement('div');
+        list.className = 'list-group';
+        if (agreements.length > 0) {
+            agreements.forEach(item => {
+                const listItem = document.createElement('div');
+                listItem.className = 'list-group-item';
+                listItem.dataset.id = item.id;
+                listItem.innerHTML = `
+                    <div class="d-flex w-100 justify-content-between">
+                        <p class="mb-1">${item.statement}</p>
+                        <button class="btn btn-danger btn-sm delete-agreement-btn">X</button>
+                    </div>
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <small>Priority: ${item.priority} | Deadline: ${new Date(item.deadline).toLocaleDateString()}</small>
+                        <select class="form-select form-select-sm update-agreement-status" style="width: 150px;">
+                            <option value="Pending" ${item.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                            <option value="Fulfilled" ${item.status === 'Fulfilled' ? 'selected' : ''}>Fulfilled</option>
+                            <option value="Breached" ${item.status === 'Breached' ? 'selected' : ''}>Breached</option>
+                        </select>
+                    </div>
+                `;
+                list.appendChild(listItem);
+            });
+        } else {
+            list.innerHTML = `<p class="text-muted">${this.t('no_agreements_yet')}</p>`;
+        }
+        this.agreementsPane.appendChild(list);
+    }
+
+    renderDecisions(decisions) {
+        this.decisionsPane.innerHTML = `<h4>${this.t('decisions_header')}</h4>`;
+
+        const form = document.createElement('form');
+        form.id = 'add-decision-form';
+        form.className = 'd-flex mb-3';
+        form.innerHTML = `
+            <input type="text" class="form-control me-2" placeholder="${this.t('new_decision_placeholder')}" required>
+            <button type="submit" class="btn btn-success btn-sm">${this.t('add_btn')}</button>
+        `;
+        this.decisionsPane.appendChild(form);
+
+        const list = document.createElement('div');
+        list.className = 'list-group';
+        if (decisions.length > 0) {
+            decisions.forEach(item => {
+                const listItem = document.createElement('div');
+                listItem.className = 'list-group-item';
+                listItem.dataset.id = item.id;
+                listItem.innerHTML = `
+                    <p>${item.statement}</p>
+                    <small class="text-muted">Hash: ${item.hashSelf ? item.hashSelf.substring(0, 12) + '...' : 'N/A'}</small>
+                    <button class="btn btn-danger btn-sm float-end delete-decision-btn">X</button>
+                `;
+                list.appendChild(listItem);
+            });
+        } else {
+            list.innerHTML = `<p class="text-muted">${this.t('no_decisions_yet')}</p>`;
+        }
+        this.decisionsPane.appendChild(list);
     }
 }
