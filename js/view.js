@@ -10,6 +10,14 @@ export default class View {
         this.emptyView = document.getElementById('empty-view');
         this.mainMeetingTitle = document.getElementById('main-meeting-title');
 
+        // Import/Export
+        this.importBtn = document.getElementById('import-btn');
+        this.importFileInput = document.getElementById('import-file-input');
+        this.exportWorkspaceBtn = document.getElementById('export-workspace-btn');
+        this.exportMeetingJsonBtn = document.getElementById('export-meeting-json-btn');
+        this.exportMeetingMdBtn = document.getElementById('export-meeting-md-btn');
+        this.exportTasksCsvBtn = document.getElementById('export-tasks-csv-btn');
+
         // Tab Panes
         this.agendaPane = document.getElementById('agenda-pane');
         this.notasPane = document.getElementById('notas-pane');
@@ -381,5 +389,12 @@ export default class View {
                 updateTaskHandler(id, { estado: newStatus });
             }
         });
+    }
+
+    bindExportEvents(workspaceHandler, meetingJsonHandler, tasksCsvHandler, markdownHandler) {
+        this.exportWorkspaceBtn.addEventListener('click', workspaceHandler);
+        this.exportMeetingJsonBtn.addEventListener('click', meetingJsonHandler);
+        this.exportTasksCsvBtn.addEventListener('click', tasksCsvHandler);
+        this.exportMeetingMdBtn.addEventListener('click', markdownHandler);
     }
 }

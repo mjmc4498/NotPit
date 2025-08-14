@@ -16,6 +16,8 @@ export default class Controller {
         this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
         // Tareas
         this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
+        // Export
+        this.view.bindExportEvents(this.handleExportWorkspace, this.handleExportSingleMeetingJSON, this.handleExportTasksCSV, this.handleExportMarkdown);
 
         // Initial display
         this.showMeetingsInSidebar();
@@ -174,4 +176,164 @@ export default class Controller {
             await this.refreshTasksView();
         }
     };
+
+    // --- Import/Export Handlers ---
+
+    _downloadFile(filename, data, type = 'application/json') {
+        const blob = new Blob([data], { type });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    handleExportWorkspace = async () => {
+        try {
+            const workspaceData = await this.store.exportWorkspace();
+            const filename = `notpit-workspace-backup-${new Date().toISOString().split('T')[0]}.json`;
+            this._downloadFile(filename, JSON.stringify(workspaceData, null, 2));
+        } catch (error) {
+            console.error('Workspace export failed:', error);
+            alert('Failed to export workspace.');
+        }
+    }
+
+    handleExportSingleMeetingJSON = async () => {
+        if (!this.activeMeetingId) {
+            alert('Please select a meeting to export.');
+            return;
+        }
+        try {
+            const meeting = await this.store.getMeeting(this.activeMeetingId);
+            const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
+            const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
+            const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+            // In a real app, we'd fetch participants, agreements, etc. too
+
+            const bundledData = {
+                meeting,
+                agendaItems,
+                noteBlocks,
+                tasks,
+            };
+
+            const filename = `notpit-meeting-${meeting.id}-${new Date().toISOString().split('T')[0]}.json`;
+            this._downloadFile(filename, JSON.stringify(bundledData, null, 2));
+
+        } catch (error) {
+            console.error('Meeting export failed:', error);
+            alert('Failed to export meeting.');
+        }
+    }
+
+    _convertToCSV(data) {
+        if (data.length === 0) return '';
+        const headers = Object.keys(data[0]);
+        const rows = data.map(row =>
+            headers.map(header => {
+                let cell = row[header] === null || row[header] === undefined ? '' : row[header];
+                cell = String(cell);
+                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                    cell = `"${cell.replace(/"/g, '""')}"`;
+                }
+                return cell;
+            }).join(',')
+        );
+        return [headers.join(','), ...rows].join('\n');
+    }
+
+    handleExportTasksCSV = async () => {
+        if (!this.activeMeetingId) {
+            alert('Please select a meeting to export tasks from.');
+            return;
+        }
+        try {
+            const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+            if (tasks.length === 0) {
+                alert('No tasks to export.');
+                return;
+            }
+            const csvData = this._convertToCSV(tasks);
+            const filename = `notpit-tasks-meeting-${this.activeMeetingId}-${new Date().toISOString().split('T')[0]}.csv`;
+            this._downloadFile(filename, csvData, 'text/csv;charset=utf-8;');
+        } catch (error) {
+            console.error('CSV export failed:', error);
+            alert('Failed to export tasks as CSV.');
+        }
+    }
+
+    _generateYAMLFrontMatter(meeting) {
+        // A simple YAML generator
+        const metadata = {
+            title: meeting.título,
+            date: meeting.fechaInicio,
+            location: meeting.ubicación || 'N/A',
+            link: meeting.virtualLink || 'N/A',
+            tags: meeting.etiquetas.join(', ')
+        };
+        return '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${value}`).join('\n') + '\n---\n\n';
+    }
+
+    _generateMarkdownBody(meeting, agenda, notes, tasks) {
+        let body = `# Meeting: ${meeting.título}\n\n`;
+
+        body += '## Agenda\n';
+        if (agenda.length > 0) {
+            agenda.sort((a,b) => a.order - b.order).forEach(item => {
+                body += `- ${item.título}\n`;
+            });
+        } else {
+            body += 'No agenda items.\n';
+        }
+        body += '\n';
+
+        body += '## Notes\n';
+        if (notes.length > 0) {
+            notes.forEach(item => {
+                body += `### ${item.tipo}\n${item.contenido}\n\n`;
+            });
+        } else {
+            body += 'No notes taken.\n';
+        }
+        body += '\n';
+
+        body += '## Tasks\n';
+        if (tasks.length > 0) {
+            tasks.forEach(task => {
+                body += `- [${task.estado === 'Done' ? 'x' : ' '}] ${task.descripción} (Priority: ${task.prioridad})\n`;
+            });
+        } else {
+            body += 'No tasks assigned.\n';
+        }
+
+        return body;
+    }
+
+    handleExportMarkdown = async () => {
+        if (!this.activeMeetingId) {
+            alert('Please select a meeting to export.');
+            return;
+        }
+        try {
+            const meeting = await this.store.getMeeting(this.activeMeetingId);
+            const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
+            const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
+            const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+
+            const yaml = this._generateYAMLFrontMatter(meeting);
+            const body = this._generateMarkdownBody(meeting, agendaItems, noteBlocks, tasks);
+            const markdownContent = yaml + body;
+
+            const filename = `notpit-meeting-${meeting.id}-${new Date().toISOString().split('T')[0]}.md`;
+            this._downloadFile(filename, markdownContent, 'text/markdown;charset=utf-8;');
+
+        } catch (error) {
+            console.error('Markdown export failed:', error);
+            alert('Failed to export as Markdown.');
+        }
+    }
 }

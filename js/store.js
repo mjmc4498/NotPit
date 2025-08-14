@@ -228,4 +228,27 @@ export default class Store {
     }
 
     // ... other entity methods ...
+
+    async exportWorkspace() {
+        const db = await this._openDB();
+        const exportableStores = ['meetings', 'participants', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions'];
+        const workspace = {};
+
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction(exportableStores, 'readonly');
+            transaction.onerror = e => reject(`Transaction error: ${e.target.errorCode}`);
+
+            let completed = 0;
+            exportableStores.forEach(storeName => {
+                const store = transaction.objectStore(storeName);
+                store.getAll().onsuccess = e => {
+                    workspace[storeName] = e.target.result;
+                    completed++;
+                    if (completed === exportableStores.length) {
+                        resolve(workspace);
+                    }
+                };
+            });
+        });
+    }
 }
