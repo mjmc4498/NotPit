@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotPit - Meeting Notes Manager</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="bg-dark text-white p-4 mb-4">
+        <div class="container">
+            <h1 class="h3">NotPit: Meeting Notes Manager</h1>
+            <p>Your offline-first, secure meeting notes companion.</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="row">
+            <!-- Note Editor Column -->
+            <div class="col-md-6">
+                <h2>Meeting Details</h2>
+                <form id="note-form">
+                    <div class="mb-3">
+                        <label for="meeting-title" class="form-label">Meeting Title</label>
+                        <input type="text" class="form-control" id="meeting-title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="meeting-date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-agenda" class="form-label">Agenda</label>
+                        <textarea class="form-control" id="meeting-agenda" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-notes" class="form-label">Structured Notes</label>
+                        <textarea class="form-control" id="meeting-notes" rows="5"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-agreements" class="form-label">Agreements</label>
+                        <textarea class="form-control" id="meeting-agreements" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-decisions" class="form-label">Decisions</label>
+                        <textarea class="form-control" id="meeting-decisions" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-tasks" class="form-label">Tasks</label>
+                        <textarea class="form-control" id="meeting-tasks" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="meeting-attachments" class="form-label">Attachments (Max 2MB each)</label>
+                        <input type="file" class="form-control" id="meeting-attachments" multiple>
+                        <div id="attachments-list-container" class="mt-2"></div>
+                    </div>
+                    <input type="hidden" id="editing-note-id">
+                    <button type="submit" class="btn btn-primary" id="save-btn">Save Note</button>
+                    <button type="button" class="btn btn-secondary d-none" id="cancel-edit-btn">Cancel Edit</button>
+                </form>
+            </div>
+
+            <!-- Notes List Column -->
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2>My Notes</h2>
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm" id="import-btn">Import</button>
+                        <input type="file" id="import-file-input" class="d-none" accept=".json">
+                        <button class="btn btn-outline-primary btn-sm" id="export-btn">Export All</button>
+                    </div>
+                </div>
+                <div id="notes-list">
+                    <!-- Notes will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Summary Modal -->
+    <div class="modal fade" id="summaryModal" tabindex="-1" aria-labelledby="summaryModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="summaryModalLabel">Meeting Summary</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" id="summary-content">
+            <!-- Summary will be injected here -->
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="copy-summary-btn">Copy Text</button>
+            <button type="button" class="btn btn-info" id="print-summary-btn">Print</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

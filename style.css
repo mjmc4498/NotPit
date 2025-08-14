@@ -1,0 +1,39 @@
+/* General Body Styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+
+@media print {
+  body.printing-summary > :not(.modal-open) {
+    display: none;
+  }
+  .modal-backdrop {
+      display: none !important;
+  }
+  body.printing-summary .modal {
+    display: block !important;
+    position: static !important;
+    opacity: 1 !important;
+  }
+  body.printing-summary .modal-dialog {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    box-shadow: none;
+  }
+  body.printing-summary .modal-header,
+  body.printing-summary .modal-footer {
+    display: none;
+  }
+  body.printing-summary .modal-content {
+      border: none;
+  }
+  body.printing-summary .modal-body {
+    padding: 0;
+  }
+}
