@@ -224,8 +224,33 @@ export default class Store {
     }
 
     async deleteMeeting(id) {
-        return this._transact('meetings', 'readwrite', (store, resolve) => {
-            store.delete(id).onsuccess = () => resolve();
+        const storesToClear = [
+            'agendaItems', 'noteBlocks', 'tasks',
+            'agreements', 'decisions', 'events'
+        ];
+        const db = await this._openDB();
+        const tx = db.transaction(['meetings', ...storesToClear], 'readwrite');
+
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+
+            // Delete main meeting
+            tx.objectStore('meetings').delete(id);
+
+            // Delete all associated items
+            storesToClear.forEach(storeName => {
+                const store = tx.objectStore(storeName);
+                const index = store.index('by_meeting');
+                const request = index.openCursor(id);
+                request.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                }
+            });
         });
     }
 
@@ -254,16 +279,6 @@ export default class Store {
         });
     }
 
-    async saveAllNoteBlocks(noteBlocks) {
-        const db = await this._openDB();
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction('noteBlocks', 'readwrite');
-            const store = transaction.objectStore('noteBlocks');
-            noteBlocks.forEach(nb => store.put(nb));
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = e => reject(`Transaction error: ${e.target.errorCode}`);
-        });
-    }
 
     // --- Agenda Item Methods ---
     async getAgendaItemsForMeeting(meetingId) {
@@ -294,11 +309,15 @@ export default class Store {
         const db = await this._openDB();
         const transaction = db.transaction('agendaItems', 'readwrite');
         const store = transaction.objectStore('agendaItems');
-        items.forEach(item => store.put(item));
-        return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = e => reject(e);
+        const promises = items.map(async (item) => {
+            const payload = await this._encryptItem(item);
+            return new Promise((resolve, reject) => {
+                const req = store.put(payload);
+                req.onsuccess = resolve;
+                req.onerror = reject;
+            });
         });
+        await Promise.all(promises);
     }
 
     // --- Task Methods ---
@@ -381,9 +400,12 @@ export default class Store {
 
             // 1. Find the last decision to get the previous hash
             const cursorReq = decisionsStore.index('by_meeting').openCursor(decisionData.meetingId, 'prev');
-            let lastDecision = null;
             cursorReq.onsuccess = async (event) => {
-                lastDecision = event.target.result ? event.target.result.value : null;
+                const cursor = event.target.result;
+                let lastDecision = null;
+                if (cursor) {
+                    lastDecision = await this._decryptItem(cursor.value);
+                }
 
                 // 2. Prepare the new decision object
                 const newDecision = { ...decisionData };
@@ -403,11 +425,12 @@ export default class Store {
 
                     // 4. Update the meeting's hashChainHead
                     const getMeetingReq = meetingsStore.get(decisionData.meetingId);
-                    getMeetingReq.onsuccess = (getEvent) => {
-                        const meeting = getEvent.target.result;
+                    getMeetingReq.onsuccess = async (getEvent) => {
+                        const meeting = await this._decryptItem(getEvent.target.result);
                         if (meeting) {
                             meeting.hashChainHead = newDecision.hashSelf;
-                            meetingsStore.put(meeting); // This will resolve the transaction
+                            const encryptedMeeting = await this._encryptItem(meeting);
+                            meetingsStore.put(encryptedMeeting); // This will resolve the transaction
                         } else {
                             tx.abort();
                             reject(new Error(`Meeting with id ${decisionData.meetingId} not found.`));

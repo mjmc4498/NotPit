@@ -10,7 +10,7 @@ export default class Controller {
         this.currentlyViewedNote = null;
 
         // Bind view event handlers to controller methods
-        this.view.bindSelectMeeting(this.handleSelectMeeting);
+        this.view.bindMeetingListEvents(this.handleSelectMeeting, this.handleDeleteMeeting);
         this.view.bindNewMeeting(this.handleNewMeeting);
         this.view.bindCreateMeeting(this.handleCreateMeetingFromTemplate);
         // Agenda
@@ -31,6 +31,7 @@ export default class Controller {
         // Sharing
         this.view.bindSharingEvents(this.handleShare, this.handleCopyTasksCSV);
         this.view.bindSignMeeting(this.handleSignMeeting);
+        this.view.bindRenameMeeting(this.handleRenameMeeting);
         // Import
         this.view.bindImportEvents(this.handleImport);
         this.view.bindLockWorkspace(this.handleLockWorkspace);
@@ -175,6 +176,40 @@ export default class Controller {
         await this.handleSelectMeeting(newMeetingId);
     }
 
+    handleDeleteMeeting = async (id) => {
+        const meeting = await this.store.getMeeting(id);
+        if (!meeting) return;
+
+        this.view.showConfirmation(this.t('confirm_delete_meeting', { title: meeting.título }), async () => {
+            await this.store.deleteMeeting(id);
+            this.view.showToast('Meeting deleted successfully.', 'success');
+
+            if (this.activeMeetingId === id) {
+                this.activeMeetingId = null;
+                this.view.showEmptyView();
+            }
+            await this.showMeetingsInSidebar();
+        });
+    }
+
+    handleRenameMeeting = async () => {
+        if (!this.activeMeetingId) return;
+
+        const meeting = await this.store.getMeeting(this.activeMeetingId);
+        if (!meeting) return;
+
+        const newTitle = prompt(this.t('rename_meeting_prompt'), meeting.título);
+
+        if (newTitle && newTitle !== meeting.título) {
+            meeting.título = newTitle;
+            await this.store.saveMeeting(meeting);
+            this.view.showToast('Meeting renamed successfully.', 'success');
+            // Refresh views to show new title
+            this.view.mainMeetingTitle.textContent = newTitle;
+            await this.showMeetingsInSidebar();
+        }
+    }
+
     // --- Agenda Handlers ---
     handleAddAgendaItem = async (title) => {
         if (!this.activeMeetingId) return;
@@ -204,8 +239,13 @@ export default class Controller {
         const fullItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
         const itemsToSave = fullItems.map(item => {
             const reorderedItem = reorderedData.find(d => d.id === item.id);
-            return { ...item, order: reorderedItem ? reorderedItem.order : item.order };
-        });
+            // Ensure we don't save items that weren't reordered.
+            if (reorderedItem) {
+                return { ...item, order: reorderedItem.order };
+            }
+            return item;
+        }).filter(item => reorderedData.some(d => d.id === item.id)); // only save changed items
+
         await this.store.saveAgendaOrder(itemsToSave);
         await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_REORDERED', details: {} });
     }

@@ -17,6 +17,7 @@ export default class View {
         this.mainContentView = document.getElementById('meeting-content-view');
         this.emptyView = document.getElementById('empty-view');
         this.mainMeetingTitle = document.getElementById('main-meeting-title');
+        this.renameMeetingBtn = document.getElementById('rename-meeting-btn');
         this.signMeetingBtn = document.getElementById('sign-meeting-btn');
         this.lockWorkspaceBtn = document.getElementById('lock-workspace-btn');
         this.settingsBtn = document.getElementById('settings-btn');
@@ -71,10 +72,13 @@ export default class View {
                 item.dataset.id = meeting.id;
                 item.style.cursor = 'pointer';
                 item.innerHTML = `
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">${meeting.título}</h6>
+                    <div class="d-flex w-100 justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">${meeting.título}</h6>
+                            <small class="text-muted">${new Date(meeting.fechaInicio).toLocaleDateString()}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger delete-meeting-btn" aria-label="Delete Meeting"><i class="bi bi-trash"></i></button>
                     </div>
-                    <small class="text-muted">${new Date(meeting.fechaInicio).toLocaleDateString()}</small>
                 `;
                 if (meeting.id === activeMeetingId) item.classList.add('active');
                 this.meetingsList.appendChild(item);
@@ -217,11 +221,17 @@ export default class View {
         this.emptyView.classList.remove('d-none');
     }
 
-    bindSelectMeeting(handler) {
+    bindMeetingListEvents(selectHandler, deleteHandler) {
         this.meetingsList.addEventListener('click', event => {
-            event.preventDefault();
             const item = event.target.closest('.list-group-item');
-            if (item) handler(Number(item.dataset.id));
+            if (!item) return;
+
+            if (event.target.closest('.delete-meeting-btn')) {
+                event.stopPropagation();
+                deleteHandler(Number(item.dataset.id));
+            } else {
+                selectHandler(Number(item.dataset.id));
+            }
         });
     }
 
@@ -406,6 +416,10 @@ export default class View {
 
     bindSignMeeting(handler) {
         this.signMeetingBtn.addEventListener('click', handler);
+    }
+
+    bindRenameMeeting(handler) {
+        this.renameMeetingBtn.addEventListener('click', handler);
     }
 
     toggleSignButton(show) {

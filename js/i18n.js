@@ -49,6 +49,7 @@ const locales = {
     encryption_enabled_fail: "Failed to enable encryption. Please try again.",
     confirm_modal_title: "Confirmation",
     confirm_btn: "Confirm",
+    rename_meeting_prompt: "Enter the new name for the meeting:",
     // Dynamic content
     no_meetings_found: "No meetings found.",
     agenda_header: "Agenda",
@@ -158,6 +159,7 @@ const locales = {
     encryption_enabled_fail: "Falló la activación de la encriptación. Por favor, inténtalo de nuevo.",
     confirm_modal_title: "Confirmación",
     confirm_btn: "Confirmar",
+    rename_meeting_prompt: "Introduce el nuevo nombre para la reunión:",
     // Dynamic content
     no_meetings_found: "No se encontraron reuniones.",
     agenda_header: "Agenda",
