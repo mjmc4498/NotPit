@@ -182,7 +182,7 @@ export default class Controller {
 
         this.view.showConfirmation(this.t('confirm_delete_meeting', { title: meeting.título }), async () => {
             await this.store.deleteMeeting(id);
-            this.view.showToast('Meeting deleted successfully.', 'success');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_meeting') }), 'success');
 
             if (this.activeMeetingId === id) {
                 this.activeMeetingId = null;
@@ -203,7 +203,7 @@ export default class Controller {
         if (newTitle && newTitle !== meeting.título) {
             meeting.título = newTitle;
             await this.store.saveMeeting(meeting);
-            this.view.showToast('Meeting renamed successfully.', 'success');
+            this.view.showToast(this.t('item_renamed_success', { item: this.t('item_meeting') }), 'success');
             // Refresh views to show new title
             this.view.mainMeetingTitle.textContent = newTitle;
             await this.showMeetingsInSidebar();
@@ -231,7 +231,7 @@ export default class Controller {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_ITEM_DELETED', details: { id } });
             await this.store.deleteAgendaItem(id);
             await this.refreshAgendaView();
-            this.view.showToast('Agenda item deleted.', 'info');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_agenda_item') }), 'info');
         });
     }
 
@@ -279,7 +279,7 @@ export default class Controller {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_DELETED', details: { id } });
             await this.store.deleteNoteBlock(id);
             await this.refreshNotesView();
-            this.view.showToast('Note block deleted.', 'info');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_note_block') }), 'info');
         });
     }
 
@@ -318,7 +318,7 @@ export default class Controller {
             await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_DELETED', details: { id } });
             await this.store.deleteTask(id);
             await this.refreshTasksView();
-            this.view.showToast('Task deleted.', 'info');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_task') }), 'info');
         });
     };
 
@@ -585,7 +585,7 @@ export default class Controller {
         this.view.showConfirmation(this.t('confirm_delete_agreement'), async () => {
             await this.store.deleteAgreement(id);
             await this.refreshAgreementsView();
-            this.view.showToast('Agreement deleted.', 'info');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_agreement') }), 'info');
         });
     }
 
@@ -615,7 +615,7 @@ export default class Controller {
         this.view.showConfirmation(this.t('confirm_delete_decision'), async () => {
             await this.store.deleteDecision(id);
             await this.refreshDecisionsView();
-            this.view.showToast('Decision deleted.', 'info');
+            this.view.showToast(this.t('item_deleted_success', { item: this.t('item_decision') }), 'info');
         });
     }
 

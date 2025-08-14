@@ -156,7 +156,7 @@ export default class View {
                     <textarea class="form-control" rows="5">${nb.contenido}</textarea>
                     <div class="mt-1">
                         <button class="btn btn-success btn-sm save-note-block-btn"><i class="bi bi-save"></i> ${this.t('save_btn')}</button>
-                        <button class="btn btn-danger btn-sm delete-note-block-btn" aria-label="${this.t('delete_btn')}"><i class="bi bi-trash"></i> ${this.t('delete_btn')}</button>
+                        <button class="btn btn-danger btn-sm delete-note-block-btn" aria-label="${this.t('delete_btn')}"><i class="bi bi-trash"></i></button>
                     </div>
                 `;
                 noteBlocksContainer.appendChild(wrapper);
@@ -675,11 +675,11 @@ export default class View {
                         <button class="btn btn-danger btn-sm delete-agreement-btn"><i class="bi bi-trash"></i></button>
                     </div>
                     <div class="d-flex w-100 justify-content-between align-items-center">
-                        <small>Priority: ${item.priority} | Deadline: ${new Date(item.deadline).toLocaleDateString()}</small>
+                        <small>${this.t('priority_label')}: ${item.priority} | ${this.t('deadline_label')}: ${new Date(item.deadline).toLocaleDateString()} | ${this.t('status_label')}: ${this.t('status_' + item.status.toLowerCase())}</small>
                         <select class="form-select form-select-sm update-agreement-status" style="width: 150px;">
-                            <option value="Pending" ${item.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                            <option value="Fulfilled" ${item.status === 'Fulfilled' ? 'selected' : ''}>Fulfilled</option>
-                            <option value="Breached" ${item.status === 'Breached' ? 'selected' : ''}>Breached</option>
+                            <option value="Pending" ${item.status === 'Pending' ? 'selected' : ''}>${this.t('status_pending')}</option>
+                            <option value="Fulfilled" ${item.status === 'Fulfilled' ? 'selected' : ''}>${this.t('status_fulfilled')}</option>
+                            <option value="Breached" ${item.status === 'Breached' ? 'selected' : ''}>${this.t('status_breached')}</option>
                         </select>
                     </div>
                 `;
