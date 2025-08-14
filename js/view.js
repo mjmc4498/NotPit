@@ -24,6 +24,12 @@ export default class View {
         this.agendaPane = document.getElementById('agenda-pane');
         this.notasPane = document.getElementById('notas-pane');
         this.tareasPane = document.getElementById('tareas-pane');
+
+        // New Meeting Modal
+        this.newMeetingModalEl = document.getElementById('new-meeting-modal');
+        this.newMeetingModal = new bootstrap.Modal(this.newMeetingModalEl);
+        this.newMeetingForm = document.getElementById('new-meeting-form');
+        this.newMeetingTemplateSelect = document.getElementById('new-meeting-template');
     }
 
     // --- RENDER METHODS ---
@@ -318,5 +324,33 @@ export default class View {
         this.exportMeetingJsonBtn.addEventListener('click', meetingJsonHandler);
         this.exportTasksCsvBtn.addEventListener('click', tasksCsvHandler);
         this.exportMeetingMdBtn.addEventListener('click', markdownHandler);
+    }
+
+    showNewMeetingModal(templates) {
+        // Clear previous options
+        this.newMeetingTemplateSelect.innerHTML = `<option value="none">${this.t('template_none')}</option>`;
+
+        templates.forEach(template => {
+            const option = document.createElement('option');
+            option.value = template.id;
+            option.textContent = template.name;
+            this.newMeetingTemplateSelect.appendChild(option);
+        });
+
+        this.newMeetingForm.reset();
+        this.newMeetingModal.show();
+    }
+
+    bindCreateMeeting(handler) {
+        this.newMeetingForm.addEventListener('submit', event => {
+            event.preventDefault();
+            const title = this.newMeetingForm.querySelector('#new-meeting-title').value;
+            const templateId = this.newMeetingTemplateSelect.value;
+
+            if (title) {
+                handler(title, templateId);
+                this.newMeetingModal.hide();
+            }
+        });
     }
 }

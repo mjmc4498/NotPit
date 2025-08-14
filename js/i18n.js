@@ -55,6 +55,13 @@ const locales = {
     new_meeting_title_default: "New Meeting",
     new_note_content_default: "New note...",
     meeting_header: "Meeting: {title}",
+    // New Meeting Modal
+    new_meeting_modal_title: "Create New Meeting",
+    new_meeting_title_label: "Meeting Title",
+    new_meeting_template_label: "Agenda Template",
+    template_none: "None (Blank Agenda)",
+    cancel_btn: "Cancel",
+    create_meeting_btn: "Create Meeting",
   },
   es: {
     // Static UI
@@ -112,6 +119,13 @@ const locales = {
     new_meeting_title_default: "Nueva Reunión",
     new_note_content_default: "Nueva nota...",
     meeting_header: "Reunión: {title}",
+    // New Meeting Modal
+    new_meeting_modal_title: "Crear Nueva Reunión",
+    new_meeting_title_label: "Título de la Reunión",
+    new_meeting_template_label: "Plantilla de Agenda",
+    template_none: "Ninguna (Agenda en Blanco)",
+    cancel_btn: "Cancelar",
+    create_meeting_btn: "Crear Reunión",
   }
 };
 

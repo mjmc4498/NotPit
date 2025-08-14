@@ -15,7 +15,7 @@ export default class Store {
         }
 
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 2);
+            const request = indexedDB.open(this.dbName, 3); // Version 3 for new templates store
 
             request.onupgradeneeded = event => {
                 const db = event.target.result;
@@ -45,8 +45,22 @@ export default class Store {
                     agendaItemStore.createIndex('by_meeting', 'meetingId', { unique: false });
                     const noteBlockStore = transaction.objectStore('noteBlocks');
                     noteBlockStore.createIndex('by_meeting', 'meetingId', { unique: false });
+                }
 
-                    // --- Data Migration from v1 'notes' store ---
+                if (oldVersion < 3) {
+                    const templateStore = db.createObjectStore('templates', { keyPath: 'id', autoIncrement: true });
+                    const defaultTemplates = [
+                        { name: '1-on-1', agenda_titles: ['Catch up & Personal', 'Feedback & Blockers', 'Goals & Priorities', 'Action Items'] },
+                        { name: 'Daily Stand-up', agenda_titles: ['What did you do yesterday?', 'What will you do today?', 'Any blockers?'] },
+                        { name: 'Sprint Review', agenda_titles: ['Sprint Goal Recap', 'Demo of Completed Work', 'Stakeholder Feedback', 'Next Sprint Planning'] },
+                        { name: 'Incident RCA', agenda_titles: ['Incident Summary', 'Timeline of Events', 'Root Cause Analysis', 'Impact Assessment', 'Corrective Actions'] }
+                    ];
+                    defaultTemplates.forEach(template => templateStore.add(template));
+                }
+
+
+                // --- Data Migration from v1 'notes' store ---
+                if (oldVersion < 2) {
                     if (transaction.objectStoreNames.contains('notes')) {
                         const oldNotesStore = transaction.objectStore('notes');
                         const newMeetingsStore = transaction.objectStore('meetings');
@@ -229,9 +243,15 @@ export default class Store {
 
     // ... other entity methods ...
 
+    async getTemplates() {
+        return this._transact('templates', 'readonly', (store, resolve) => {
+            store.getAll().onsuccess = e => resolve(e.target.result);
+        });
+    }
+
     async exportWorkspace() {
         const db = await this._openDB();
-        const exportableStores = ['meetings', 'participants', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions'];
+        const exportableStores = ['meetings', 'participants', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions', 'templates'];
         const workspace = {};
 
         return new Promise((resolve, reject) => {

@@ -10,11 +10,16 @@ export default class Controller {
         // Bind view event handlers to controller methods
         this.view.bindSelectMeeting(this.handleSelectMeeting);
         this.view.bindNewMeeting(this.handleNewMeeting);
+        this.view.bindCreateMeeting(this.handleCreateMeetingFromTemplate);
+        // Agenda
         this.view.bindAddAgendaItem(this.handleAddAgendaItem);
         this.view.bindDeleteAgendaItem(this.handleDeleteAgendaItem);
         this.view.bindDragAndDropAgenda(this.handleUpdateAgendaOrder);
+        // Notas
         this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
+        // Tareas
         this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
+        // Export
         this.view.bindExportEvents(this.handleExportWorkspace, this.handleExportSingleMeetingJSON, this.handleExportTasksCSV, this.handleExportMarkdown);
 
         this.showMeetingsInSidebar();
@@ -60,8 +65,13 @@ export default class Controller {
     }
 
     handleNewMeeting = async () => {
+        const templates = await this.store.getTemplates();
+        this.view.showNewMeetingModal(templates);
+    }
+
+    handleCreateMeetingFromTemplate = async (title, templateId) => {
         const newMeeting = {
-            título: this.t('new_meeting_title_default'), // A key for "New Meeting"
+            título: title,
             fechaInicio: new Date().toISOString(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -70,8 +80,26 @@ export default class Controller {
             agenda: [], tareas: [], acuerdos: [], decisiones: [],
             adjuntos: [], hashChainHead: null
         };
-        const newId = await this.store.saveMeeting(newMeeting);
-        await this.handleSelectMeeting(newId);
+        const newMeetingId = await this.store.saveMeeting(newMeeting);
+
+        if (templateId !== 'none') {
+            const templates = await this.store.getTemplates();
+            const template = templates.find(t => t.id === Number(templateId));
+            if (template) {
+                const agendaItems = template.agenda_titles.map((title, index) => ({
+                    meetingId: newMeetingId,
+                    título: title,
+                    estado: 'pendiente',
+                    order: index,
+                }));
+                // In a real app, you might want to do this in a single transaction
+                for (const item of agendaItems) {
+                    await this.store.saveAgendaItem(item);
+                }
+            }
+        }
+
+        await this.handleSelectMeeting(newMeetingId);
     }
 
     // --- Agenda Handlers ---
@@ -111,7 +139,7 @@ export default class Controller {
         const newNoteBlock = {
             meetingId: this.activeMeetingId,
             tipo: 'texto',
-            contenido: this.t('new_note_content_default') // A key for "New note..."
+            contenido: this.t('new_note_content_default')
         };
         await this.store.saveNoteBlock(newNoteBlock);
         await this.refreshNotesView();
