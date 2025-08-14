@@ -207,5 +207,25 @@ export default class Store {
         });
     }
 
+    // --- Task Methods ---
+    async getTasksForMeeting(meetingId) {
+        return this._transact('tasks', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async saveTask(task) {
+        return this._transact('tasks', 'readwrite', (store, resolve) => {
+            store.put(task).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async deleteTask(id) {
+        return this._transact('tasks', 'readwrite', (store, resolve) => {
+            store.delete(id).onsuccess = () => resolve();
+        });
+    }
+
     // ... other entity methods ...
 }

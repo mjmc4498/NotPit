@@ -10,9 +10,10 @@ export default class View {
         this.emptyView = document.getElementById('empty-view');
         this.mainMeetingTitle = document.getElementById('main-meeting-title');
 
-        // Tab Panes (placeholders for now)
+        // Tab Panes
         this.agendaPane = document.getElementById('agenda-pane');
         this.notasPane = document.getElementById('notas-pane');
+        this.tareasPane = document.getElementById('tareas-pane');
         // ... other panes would be referenced here as they are implemented
     }
 
@@ -299,5 +300,86 @@ export default class View {
 
         textarea.setRangeText(newText, start, end, 'select');
         textarea.focus();
+    }
+
+    renderTasks(tasks) {
+        this.tareasPane.innerHTML = '<h4>Tasks</h4>';
+
+        const form = document.createElement('form');
+        form.id = 'add-task-form';
+        form.className = 'd-flex mb-3';
+        form.innerHTML = `
+            <input type="text" name="description" class="form-control me-2" placeholder="New task description..." required>
+            <select name="priority" class="form-select me-2" style="width: 100px;">
+                <option value="L">Low</option>
+                <option value="M" selected>Medium</option>
+                <option value="H">High</option>
+            </select>
+            <button type="submit" class="btn btn-success btn-sm">Add</button>
+        `;
+        this.tareasPane.appendChild(form);
+
+        const list = document.createElement('div');
+        list.className = 'list-group';
+
+        if (tasks.length > 0) {
+            tasks.forEach(task => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.dataset.id = task.id;
+
+                const priorityColors = { L: 'info', M: 'warning', H: 'danger' };
+                item.innerHTML = `
+                    <span>
+                        <span class="badge bg-${priorityColors[task.prioridad] || 'secondary'} me-2">${task.prioridad}</span>
+                        ${task.descripción}
+                    </span>
+                    <div>
+                        <select class="form-select form-select-sm update-task-status me-2" style="width: 120px;">
+                            <option value="ToDo" ${task.estado === 'ToDo' ? 'selected' : ''}>To Do</option>
+                            <option value="Doing" ${task.estado === 'Doing' ? 'selected' : ''}>Doing</option>
+                            <option value="Done" ${task.estado === 'Done' ? 'selected' : ''}>Done</option>
+                        </select>
+                        <button class="btn btn-danger btn-sm delete-task-btn">X</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        } else {
+            list.innerHTML = '<p class="text-muted">No tasks for this meeting yet.</p>';
+        }
+        this.tareasPane.appendChild(list);
+    }
+
+    bindTasksTabEvents(addTaskHandler, updateTaskHandler, deleteTaskHandler) {
+        this.tareasPane.addEventListener('submit', event => {
+            if (event.target.id === 'add-task-form') {
+                event.preventDefault();
+                const form = event.target;
+                const description = form.elements.description.value;
+                const priority = form.elements.priority.value;
+                if (description) {
+                    addTaskHandler(description, priority);
+                    form.reset();
+                }
+            }
+        });
+
+        this.tareasPane.addEventListener('click', event => {
+            if (event.target.classList.contains('delete-task-btn')) {
+                const item = event.target.closest('.list-group-item');
+                const id = Number(item.dataset.id);
+                deleteTaskHandler(id);
+            }
+        });
+
+        this.tareasPane.addEventListener('change', event => {
+            if (event.target.classList.contains('update-task-status')) {
+                const item = event.target.closest('.list-group-item');
+                const id = Number(item.dataset.id);
+                const newStatus = event.target.value;
+                updateTaskHandler(id, { estado: newStatus });
+            }
+        });
     }
 }

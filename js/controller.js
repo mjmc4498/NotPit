@@ -8,112 +8,96 @@ export default class Controller {
         // Bind view event handlers to controller methods
         this.view.bindSelectMeeting(this.handleSelectMeeting);
         this.view.bindNewMeeting(this.handleNewMeeting);
+        // Agenda
         this.view.bindAddAgendaItem(this.handleAddAgendaItem);
         this.view.bindDeleteAgendaItem(this.handleDeleteAgendaItem);
         this.view.bindDragAndDropAgenda(this.handleUpdateAgendaOrder);
+        // Notas
         this.view.bindNotesTabEvents(this.handleAddNoteBlock, this.handleSaveNoteBlock, this.handleDeleteNoteBlock);
+        // Tareas
+        this.view.bindTasksTabEvents(this.handleAddTask, this.handleUpdateTask, this.handleDeleteTask);
 
         // Initial display
         this.showMeetingsInSidebar();
         this.view.showEmptyView();
     }
 
-    /**
-     * Fetches all meetings and displays them in the sidebar.
-     */
+    // --- Core Render/Refresh Logic ---
+
     async showMeetingsInSidebar() {
         const meetings = await this.store.getAllMeetings();
         this.view.displayMeetingsInSidebar(meetings, this.activeMeetingId);
     }
 
-    /**
-     * Handles the selection of a meeting from the sidebar.
-     * @param {number} id - The ID of the selected meeting.
-     */
+    async refreshAgendaView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
+        this.view.renderAgenda(items);
+    }
+
+    async refreshNotesView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
+        this.view.renderNotes(items);
+    }
+
+    async refreshTasksView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getTasksForMeeting(this.activeMeetingId);
+        this.view.renderTasks(items);
+    }
+
+    // --- Meeting Handlers ---
+
     handleSelectMeeting = async (id) => {
-        if (this.activeMeetingId === id) return; // Do nothing if already selected
-
+        if (this.activeMeetingId === id) return;
         this.activeMeetingId = id;
-
-        // Re-render sidebar to highlight the new active item
         await this.showMeetingsInSidebar();
 
         const meeting = await this.store.getMeeting(id);
         if (meeting) {
             this.view.showMeetingDetailView(meeting);
-            // Render content for all relevant tabs
-            const agendaItems = await this.store.getAgendaItemsForMeeting(id);
-            this.view.renderAgenda(agendaItems);
-            const noteBlocks = await this.store.getNoteBlocksForMeeting(id);
-            this.view.renderNotes(noteBlocks);
+            // Render content for all tabs
+            this.refreshAgendaView();
+            this.refreshNotesView();
+            this.refreshTasksView();
         } else {
             this.activeMeetingId = null;
             this.view.showEmptyView();
         }
     }
 
-    /**
-     * Handles the creation of a new meeting.
-     */
     handleNewMeeting = async () => {
         const newMeeting = {
             título: "New Meeting",
             fechaInicio: new Date().toISOString(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            // All other properties will have default empty values
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             ubicación: '', virtualLink: '', etiquetas: [], participantes: [],
             agenda: [], tareas: [], acuerdos: [], decisiones: [],
             adjuntos: [], hashChainHead: null
         };
-
         const newId = await this.store.saveMeeting(newMeeting);
-        this.activeMeetingId = newId;
-
-        await this.showMeetingsInSidebar();
-
-        const freshMeeting = await this.store.getMeeting(newId);
-        this.view.showMeetingDetailView(freshMeeting);
-
-        // In a real app, we might want to immediately focus the title field for editing.
+        await this.handleSelectMeeting(newId);
     }
 
-    /**
-     * Refreshes the agenda view for the currently active meeting.
-     */
-    refreshAgendaView = async () => {
-        if (this.activeMeetingId) {
-            const agendaItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
-            this.view.renderAgenda(agendaItems);
-        }
-    }
+    // --- Agenda Handlers ---
 
-    /**
-     * Handles adding a new agenda item.
-     * @param {string} title - The title of the new agenda item.
-     */
     handleAddAgendaItem = async (title) => {
         if (!this.activeMeetingId) return;
-
         const items = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
         const newOrder = items.length > 0 ? Math.max(...items.map(i => i.order)) + 1 : 0;
-
         const newItem = {
             meetingId: this.activeMeetingId,
             título: title,
             estado: 'pendiente',
             order: newOrder,
         };
-
         await this.store.saveAgendaItem(newItem);
         await this.refreshAgendaView();
     }
 
-    /**
-     * Handles deleting an agenda item.
-     * @param {number} id - The ID of the agenda item to delete.
-     */
     handleDeleteAgendaItem = async (id) => {
         if (confirm('Are you sure you want to delete this agenda item?')) {
             await this.store.deleteAgendaItem(id);
@@ -121,29 +105,16 @@ export default class Controller {
         }
     }
 
-    /**
-     * Handles the reordering of agenda items after a drag-and-drop operation.
-     * @param {Array<{id: number, order: number}>} reorderedData - An array of objects with id and new order.
-     */
     handleUpdateAgendaOrder = async (reorderedData) => {
         const fullItems = await this.store.getAgendaItemsForMeeting(this.activeMeetingId);
-
         const itemsToSave = fullItems.map(item => {
             const reorderedItem = reorderedData.find(d => d.id === item.id);
             return { ...item, order: reorderedItem ? reorderedItem.order : item.order };
         });
-
         await this.store.saveAgendaOrder(itemsToSave);
     }
 
     // --- Note Block Handlers ---
-
-    refreshNotesView = async () => {
-        if (this.activeMeetingId) {
-            const noteBlocks = await this.store.getNoteBlocksForMeeting(this.activeMeetingId);
-            this.view.renderNotes(noteBlocks);
-        }
-    }
 
     handleAddNoteBlock = async () => {
         if (!this.activeMeetingId) return;
@@ -172,4 +143,35 @@ export default class Controller {
             await this.refreshNotesView();
         }
     }
+
+    // --- Task Handlers ---
+
+    handleAddTask = async (description, priority) => {
+        if (!this.activeMeetingId) return;
+        const newTask = {
+            descripción: description,
+            prioridad: priority,
+            estado: 'ToDo',
+            originMeetingId: this.activeMeetingId,
+        };
+        await this.store.saveTask(newTask);
+        await this.refreshTasksView();
+    };
+
+    handleUpdateTask = async (id, updatedFields) => {
+        const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+        const taskToUpdate = tasks.find(t => t.id === id);
+        if (taskToUpdate) {
+            const updatedTask = { ...taskToUpdate, ...updatedFields };
+            await this.store.saveTask(updatedTask);
+            await this.refreshTasksView();
+        }
+    };
+
+    handleDeleteTask = async (id) => {
+        if (confirm('Are you sure you want to delete this task?')) {
+            await this.store.deleteTask(id);
+            await this.refreshTasksView();
+        }
+    };
 }
