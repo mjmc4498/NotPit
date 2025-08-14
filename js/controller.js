@@ -47,6 +47,12 @@ export default class Controller {
         this.view.renderTasks(items);
     }
 
+    async refreshTimelineView() {
+        if (!this.activeMeetingId) return;
+        const items = await this.store.getEventsForMeeting(this.activeMeetingId);
+        this.view.renderTimeline(items);
+    }
+
     // --- Meeting Handlers ---
     handleSelectMeeting = async (id) => {
         if (this.activeMeetingId === id) return;
@@ -58,6 +64,7 @@ export default class Controller {
             this.refreshAgendaView();
             this.refreshNotesView();
             this.refreshTasksView();
+            this.refreshTimelineView();
         } else {
             this.activeMeetingId = null;
             this.view.showEmptyView();
@@ -70,7 +77,7 @@ export default class Controller {
     }
 
     handleCreateMeetingFromTemplate = async (title, templateId) => {
-        const newMeeting = {
+        const newMeetingData = {
             título: title,
             fechaInicio: new Date().toISOString(),
             createdAt: new Date().toISOString(),
@@ -80,7 +87,8 @@ export default class Controller {
             agenda: [], tareas: [], acuerdos: [], decisiones: [],
             adjuntos: [], hashChainHead: null
         };
-        const newMeetingId = await this.store.saveMeeting(newMeeting);
+        const newMeetingId = await this.store.saveMeeting(newMeetingData);
+        await this.store.logEvent({ meetingId: newMeetingId, type: 'MEETING_CREATED', details: { title } });
 
         if (templateId !== 'none') {
             const templates = await this.store.getTemplates();
@@ -92,9 +100,9 @@ export default class Controller {
                     estado: 'pendiente',
                     order: index,
                 }));
-                // In a real app, you might want to do this in a single transaction
                 for (const item of agendaItems) {
                     await this.store.saveAgendaItem(item);
+                    await this.store.logEvent({ meetingId: newMeetingId, type: 'AGENDA_ITEM_CREATED', details: { title: item.título } });
                 }
             }
         }
@@ -114,11 +122,13 @@ export default class Controller {
             order: newOrder,
         };
         await this.store.saveAgendaItem(newItem);
+        await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_ITEM_CREATED', details: { title } });
         await this.refreshAgendaView();
     }
 
     handleDeleteAgendaItem = async (id) => {
         if (confirm(this.t('confirm_delete_agenda_item'))) {
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_ITEM_DELETED', details: { id } });
             await this.store.deleteAgendaItem(id);
             await this.refreshAgendaView();
         }
@@ -131,6 +141,7 @@ export default class Controller {
             return { ...item, order: reorderedItem ? reorderedItem.order : item.order };
         });
         await this.store.saveAgendaOrder(itemsToSave);
+        await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'AGENDA_REORDERED', details: {} });
     }
 
     // --- Note Block Handlers ---
@@ -141,7 +152,8 @@ export default class Controller {
             tipo: 'texto',
             contenido: this.t('new_note_content_default')
         };
-        await this.store.saveNoteBlock(newNoteBlock);
+        const newId = await this.store.saveNoteBlock(newNoteBlock);
+        await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_CREATED', details: { id: newId } });
         await this.refreshNotesView();
     }
 
@@ -151,12 +163,14 @@ export default class Controller {
         if (noteBlockToSave) {
             noteBlockToSave.contenido = content;
             await this.store.saveNoteBlock(noteBlockToSave);
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_UPDATED', details: { id } });
             alert(this.t('note_saved_success'));
         }
     }
 
     handleDeleteNoteBlock = async (id) => {
         if (confirm(this.t('confirm_delete_note_block'))) {
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'NOTE_BLOCK_DELETED', details: { id } });
             await this.store.deleteNoteBlock(id);
             await this.refreshNotesView();
         }
@@ -171,7 +185,8 @@ export default class Controller {
             estado: 'ToDo',
             originMeetingId: this.activeMeetingId,
         };
-        await this.store.saveTask(newTask);
+        const newId = await this.store.saveTask(newTask);
+        await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_CREATED', details: { id: newId, description } });
         await this.refreshTasksView();
     };
 
@@ -179,14 +194,21 @@ export default class Controller {
         const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
         const taskToUpdate = tasks.find(t => t.id === id);
         if (taskToUpdate) {
+            const oldStatus = taskToUpdate.estado;
+            const newStatus = updatedFields.estado;
             const updatedTask = { ...taskToUpdate, ...updatedFields };
             await this.store.saveTask(updatedTask);
+
+            if (newStatus && oldStatus !== newStatus) {
+                await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_STATUS_CHANGED', details: { id, oldStatus, newStatus } });
+            }
             await this.refreshTasksView();
         }
     };
 
     handleDeleteTask = async (id) => {
         if (confirm(this.t('confirm_delete_task'))) {
+            await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_DELETED', details: { id } });
             await this.store.deleteTask(id);
             await this.refreshTasksView();
         }

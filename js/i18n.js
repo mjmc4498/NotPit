@@ -55,6 +55,7 @@ const locales = {
     new_meeting_title_default: "New Meeting",
     new_note_content_default: "New note...",
     meeting_header: "Meeting: {title}",
+    timeline_tab: "Timeline",
     // New Meeting Modal
     new_meeting_modal_title: "Create New Meeting",
     new_meeting_title_label: "Meeting Title",
@@ -119,6 +120,7 @@ const locales = {
     new_meeting_title_default: "Nueva Reunión",
     new_note_content_default: "Nueva nota...",
     meeting_header: "Reunión: {title}",
+    timeline_tab: "Línea de Tiempo",
     // New Meeting Modal
     new_meeting_modal_title: "Crear Nueva Reunión",
     new_meeting_title_label: "Título de la Reunión",

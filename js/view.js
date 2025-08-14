@@ -24,6 +24,7 @@ export default class View {
         this.agendaPane = document.getElementById('agenda-pane');
         this.notasPane = document.getElementById('notas-pane');
         this.tareasPane = document.getElementById('tareas-pane');
+        this.timelinePane = document.getElementById('timeline-pane');
 
         // New Meeting Modal
         this.newMeetingModalEl = document.getElementById('new-meeting-modal');
@@ -352,5 +353,33 @@ export default class View {
                 this.newMeetingModal.hide();
             }
         });
+    }
+
+    renderTimeline(events) {
+        this.timelinePane.innerHTML = `<h4>${this.t('timeline_tab')}</h4>`;
+
+        if (events.length === 0) {
+            this.timelinePane.innerHTML += `<p class="text-muted">No events yet for this meeting.</p>`;
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'list-group';
+
+        events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(event => {
+            const item = document.createElement('li');
+            item.className = 'list-group-item';
+
+            const details = Object.entries(event.details).map(([key, value]) => `<li>${key}: ${value}</li>`).join('');
+
+            item.innerHTML = `
+                <small class="text-muted">${new Date(event.timestamp).toLocaleString()}</small>
+                <div><strong>${event.type}</strong></div>
+                <ul>${details}</ul>
+            `;
+            list.appendChild(item);
+        });
+
+        this.timelinePane.appendChild(list);
     }
 }

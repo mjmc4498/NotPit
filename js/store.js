@@ -15,7 +15,7 @@ export default class Store {
         }
 
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 3); // Version 3 for new templates store
+            const request = indexedDB.open(this.dbName, 4); // Version 4 for events store
 
             request.onupgradeneeded = event => {
                 const db = event.target.result;
@@ -56,6 +56,11 @@ export default class Store {
                         { name: 'Incident RCA', agenda_titles: ['Incident Summary', 'Timeline of Events', 'Root Cause Analysis', 'Impact Assessment', 'Corrective Actions'] }
                     ];
                     defaultTemplates.forEach(template => templateStore.add(template));
+                }
+
+                if (oldVersion < 4) {
+                    const eventStore = db.createObjectStore('events', { keyPath: 'id', autoIncrement: true });
+                    eventStore.createIndex('by_meeting', 'meetingId', { unique: false });
                 }
 
 
@@ -243,6 +248,24 @@ export default class Store {
 
     // ... other entity methods ...
 
+    // --- Event Methods ---
+    async logEvent(eventData) {
+        const event = {
+            ...eventData,
+            timestamp: new Date().toISOString()
+        };
+        return this._transact('events', 'readwrite', (store, resolve) => {
+            store.add(event).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
+    async getEventsForMeeting(meetingId) {
+        return this._transact('events', 'readonly', (store, resolve) => {
+            const index = store.index('by_meeting');
+            index.getAll(meetingId).onsuccess = e => resolve(e.target.result);
+        });
+    }
+
     async getTemplates() {
         return this._transact('templates', 'readonly', (store, resolve) => {
             store.getAll().onsuccess = e => resolve(e.target.result);
@@ -251,7 +274,7 @@ export default class Store {
 
     async exportWorkspace() {
         const db = await this._openDB();
-        const exportableStores = ['meetings', 'participants', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions', 'templates'];
+        const exportableStores = ['meetings', 'participants', 'agendaItems', 'noteBlocks', 'tasks', 'agreements', 'decisions', 'templates', 'events'];
         const workspace = {};
 
         return new Promise((resolve, reject) => {
