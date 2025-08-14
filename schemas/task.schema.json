@@ -14,9 +14,15 @@
       "type": "string",
       "enum": ["L", "M", "H"]
     },
-    "vencimiento": {
+    "fechaInicio": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "description": "The start date for the task."
+    },
+    "fechaFin": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The end date for the task."
     },
     "estado": {
       "type": "string",

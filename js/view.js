@@ -39,6 +39,8 @@ export default class View {
         this.agreementsPane = document.getElementById('agreements-pane');
         this.decisionsPane = document.getElementById('decisions-pane');
         this.auditPane = document.getElementById('audit-pane');
+        this.ganttPane = document.getElementById('gantt-pane');
+        this.ganttChart = document.getElementById('gantt-chart');
         this.timelinePane = document.getElementById('timeline-pane');
 
         // New Meeting Modal
@@ -46,6 +48,7 @@ export default class View {
         this.newMeetingModal = new bootstrap.Modal(this.newMeetingModalEl);
         this.newMeetingForm = document.getElementById('new-meeting-form');
         this.newMeetingTemplateSelect = document.getElementById('new-meeting-template');
+        this.cachedTasks = [];
 
         // Confirmation Modal
         this.confirmationModalEl = document.getElementById('confirmation-modal');
@@ -172,48 +175,102 @@ export default class View {
 
         const form = document.createElement('form');
         form.id = 'add-task-form';
-        form.className = 'd-flex mb-3';
+        form.className = 'row g-3 mb-3';
         form.innerHTML = `
-            <input type="text" name="description" class="form-control me-2" placeholder="${this.t('new_task_placeholder')}" required>
-            <select name="priority" class="form-select me-2" style="width: 120px;">
-                <option value="L">${this.t('priority_low')}</option>
-                <option value="M" selected>${this.t('priority_medium')}</option>
-                <option value="H">${this.t('priority_high')}</option>
-            </select>
-            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button>
+            <div class="col-md-5"><input type="text" name="description" class="form-control" placeholder="${this.t('new_task_placeholder')}" required></div>
+            <div class="col-md-2"><input type="date" name="startDate" class="form-control" required></div>
+            <div class="col-md-2"><input type="date" name="endDate" class="form-control" required></div>
+            <div class="col-md-2">
+                <select name="priority" class="form-select">
+                    <option value="L">${this.t('priority_low')}</option>
+                    <option value="M" selected>${this.t('priority_medium')}</option>
+                    <option value="H">${this.t('priority_high')}</option>
+                </select>
+            </div>
+            <div class="col-md-1"><button type="submit" class="btn btn-success btn-sm"><i class="bi bi-plus"></i> ${this.t('add_btn')}</button></div>
         `;
         this.tareasPane.appendChild(form);
 
         const list = document.createElement('div');
+        list.id = 'task-list-container';
         list.className = 'list-group';
-
-        if (tasks.length > 0) {
-            tasks.forEach(task => {
-                const item = document.createElement('div');
-                item.className = 'list-group-item d-flex justify-content-between align-items-center';
-                item.dataset.id = task.id;
-
-                const priorityColors = { L: 'info', M: 'warning', H: 'danger' };
-                item.innerHTML = `
-                    <span>
-                        <span class="badge bg-${priorityColors[task.prioridad] || 'secondary'} me-2">${task.prioridad}</span>
-                        ${task.descripción}
-                    </span>
-                    <div>
-                        <select class="form-select form-select-sm update-task-status me-2" style="width: 120px;">
-                            <option value="ToDo" ${task.estado === 'ToDo' ? 'selected' : ''}>${this.t('status_todo')}</option>
-                            <option value="Doing" ${task.estado === 'Doing' ? 'selected' : ''}>${this.t('status_doing')}</option>
-                            <option value="Done" ${task.estado === 'Done' ? 'selected' : ''}>${this.t('status_done')}</option>
-                        </select>
-                        <button class="btn btn-danger btn-sm delete-task-btn" aria-label="${this.t('delete_btn')}"><i class="bi bi-trash"></i></button>
-                    </div>
-                `;
-                list.appendChild(item);
-            });
-        } else {
-            list.innerHTML = `<p class="text-muted">${this.t('no_tasks_yet')}</p>`;
-        }
         this.tareasPane.appendChild(list);
+
+        this.renderTaskList(tasks);
+    }
+
+    renderTaskList(tasks) {
+        this.cachedTasks = tasks; // Cache the tasks
+        const container = document.getElementById('task-list-container');
+        container.innerHTML = ''; // Clear existing list
+        if (tasks.length > 0) {
+            tasks.forEach(task => container.appendChild(this._createTaskItem(task)));
+        } else {
+            container.innerHTML = `<p class="text-muted">${this.t('no_tasks_yet')}</p>`;
+        }
+    }
+
+    _createTaskItem(task) {
+        const item = document.createElement('div');
+        item.className = 'list-group-item';
+        item.dataset.id = task.id;
+        item.innerHTML = this._getTaskViewTemplate(task);
+        return item;
+    }
+
+    _toggleTaskEditMode(id) {
+        const item = this.tareasPane.querySelector(`.list-group-item[data-id='${id}']`);
+        if (!item) return;
+
+        const isEditing = item.dataset.editing === 'true';
+        const task = this.cachedTasks.find(t => t.id === id); // Assumes tasks are cached
+
+        item.innerHTML = isEditing ? this._getTaskViewTemplate(task) : this._getTaskEditTemplate(task);
+        item.dataset.editing = !isEditing;
+    }
+
+    _getTaskViewTemplate(task) {
+        const priorityColors = { L: 'info', M: 'warning', H: 'danger' };
+        const startDate = task.fechaInicio ? new Date(task.fechaInicio).toLocaleDateString() : 'N/A';
+        const endDate = task.fechaFin ? new Date(task.fechaFin).toLocaleDateString() : 'N/A';
+
+        return `
+            <div class="d-flex w-100 justify-content-between">
+                <div>
+                    <span class="badge bg-${priorityColors[task.prioridad] || 'secondary'} me-2">${task.prioridad}</span>
+                    <strong class="mb-1">${task.descripción}</strong>
+                </div>
+                <div>
+                    <select class="form-select form-select-sm update-task-status me-2" style="width: 120px;">
+                        <option value="ToDo" ${task.estado === 'ToDo' ? 'selected' : ''}>${this.t('status_todo')}</option>
+                        <option value="Doing" ${task.estado === 'Doing' ? 'selected' : ''}>${this.t('status_doing')}</option>
+                        <option value="Done" ${task.estado === 'Done' ? 'selected' : ''}>${this.t('status_done')}</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary edit-task-btn"><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-sm btn-outline-danger delete-task-btn"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>
+            <small class="text-muted">Dates: ${startDate} - ${endDate}</small>
+        `;
+    }
+
+    _getTaskEditTemplate(task) {
+        return `
+            <div class="task-edit-form" data-id="${task.id}">
+                <input type="text" name="description" class="form-control mb-2" value="${task.descripción}">
+                <div class="d-flex justify-content-between">
+                    <input type="date" name="startDate" class="form-control" value="${task.fechaInicio || ''}">
+                    <input type="date" name="endDate" class="form-control ms-2" value="${task.fechaFin || ''}">
+                    <select name="priority" class="form-select ms-2">
+                        <option value="L" ${task.prioridad === 'L' ? 'selected' : ''}>${this.t('priority_low')}</option>
+                        <option value="M" ${task.prioridad === 'M' ? 'selected' : ''}>${this.t('priority_medium')}</option>
+                        <option value="H" ${task.prioridad === 'H' ? 'selected' : ''}>${this.t('priority_high')}</option>
+                    </select>
+                    <button class="btn btn-sm btn-success save-task-btn ms-2"><i class="bi bi-check-lg"></i></button>
+                    <button class="btn btn-sm btn-secondary cancel-edit-task-btn ms-1"><i class="bi bi-x-lg"></i></button>
+                </div>
+            </div>
+        `;
     }
 
     showEmptyView() {
@@ -331,17 +388,41 @@ export default class View {
                 const form = event.target;
                 const description = form.elements.description.value;
                 const priority = form.elements.priority.value;
-                if (description) {
-                    addTaskHandler(description, priority);
+                const startDate = form.elements.startDate.value;
+                const endDate = form.elements.endDate.value;
+                if (description && startDate && endDate) {
+                    addTaskHandler(description, priority, startDate, endDate);
                     form.reset();
                 }
             }
         });
+
         this.tareasPane.addEventListener('click', event => {
-            if (event.target.classList.contains('delete-task-btn')) {
-                deleteTaskHandler(Number(event.target.closest('.list-group-item').dataset.id));
+            const button = event.target.closest('button');
+            if (!button) return;
+
+            const item = event.target.closest('.list-group-item');
+            const id = Number(item.dataset.id);
+
+            if (button.classList.contains('delete-task-btn')) {
+                deleteTaskHandler(id);
+            } else if (button.classList.contains('edit-task-btn')) {
+                this._toggleTaskEditMode(id);
+            } else if (button.classList.contains('cancel-edit-task-btn')) {
+                this._toggleTaskEditMode(id);
+            } else if (button.classList.contains('save-task-btn')) {
+                const form = item.querySelector('.task-edit-form');
+                const updatedTask = {
+                    id: id,
+                    descripción: form.elements.description.value,
+                    fechaInicio: form.elements.startDate.value,
+                    fechaFin: form.elements.endDate.value,
+                    prioridad: form.elements.priority.value,
+                };
+                updateTaskHandler(id, updatedTask);
             }
         });
+
         this.tareasPane.addEventListener('change', event => {
             if (event.target.classList.contains('update-task-status')) {
                 const item = event.target.closest('.list-group-item');
@@ -770,5 +851,48 @@ export default class View {
         } else {
             this.loadingOverlay.classList.add('d-none');
         }
+    }
+
+    renderGanttChart(tasks) {
+        // Clear previous chart
+        this.ganttChart.innerHTML = '';
+
+        const validTasks = tasks.filter(task => task.fechaInicio && task.fechaFin);
+
+        if (validTasks.length === 0) {
+            this.ganttPane.innerHTML = `<p class="text-muted">No tasks with valid dates to display in Gantt chart.</p>`;
+            return;
+        }
+
+        const ganttTasks = validTasks.map(task => {
+            let progress = 0;
+            if (task.estado === 'Done') {
+                progress = 100;
+            } else if (task.estado === 'Doing') {
+                progress = 50; // Arbitrary progress for 'Doing'
+            }
+            return {
+                id: String(task.id),
+                name: task.descripción,
+                start: task.fechaInicio,
+                end: task.fechaFin,
+                progress: progress,
+            };
+        });
+
+        // eslint-disable-next-line no-new
+        new Gantt('#gantt-chart', ganttTasks, {
+            header_height: 50,
+            column_width: 30,
+            step: 24,
+            view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month'],
+            bar_height: 20,
+            bar_corner_radius: 3,
+            arrow_curve: 5,
+            padding: 18,
+            view_mode: 'Day',
+            date_format: 'YYYY-MM-DD',
+            language: 'en' // TODO: Make this dynamic
+        });
     }
 }

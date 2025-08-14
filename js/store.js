@@ -339,6 +339,14 @@ export default class Store {
         });
     }
 
+    async getTask(id) {
+        return this._transact('tasks', 'readonly', (store, resolve) => {
+            store.get(id).onsuccess = async (e) => {
+                resolve(await this._decryptItem(e.target.result));
+            };
+        });
+    }
+
     async deleteTask(id) {
         return this._transact('tasks', 'readwrite', (store, resolve) => {
             store.delete(id).onsuccess = () => resolve();

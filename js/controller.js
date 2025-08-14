@@ -106,6 +106,12 @@ export default class Controller {
         this.view.renderAuditView(items);
     }
 
+    async refreshGanttView() {
+        if (!this.activeMeetingId) return;
+        const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
+        this.view.renderGanttChart(tasks);
+    }
+
     async refreshTimelineView() {
         if (!this.activeMeetingId) return;
         const items = await this.store.getEventsForMeeting(this.activeMeetingId);
@@ -130,6 +136,7 @@ export default class Controller {
             this.refreshAgreementsView();
             this.refreshDecisionsView();
             this.refreshAuditView();
+            this.refreshGanttView();
             this.refreshTimelineView();
         } else {
             this.activeMeetingId = null;
@@ -284,11 +291,13 @@ export default class Controller {
     }
 
     // --- Task Handlers ---
-    handleAddTask = async (description, priority) => {
+    handleAddTask = async (description, priority, startDate, endDate) => {
         if (!this.activeMeetingId) return;
         const newTask = {
             descripción: description,
             prioridad: priority,
+            fechaInicio: startDate,
+            fechaFin: endDate,
             estado: 'ToDo',
             originMeetingId: this.activeMeetingId,
         };
@@ -298,17 +307,20 @@ export default class Controller {
     };
 
     handleUpdateTask = async (id, updatedFields) => {
-        const tasks = await this.store.getTasksForMeeting(this.activeMeetingId);
-        const taskToUpdate = tasks.find(t => t.id === id);
+        // To get the full task object, we need to fetch it from the store
+        const taskToUpdate = await this.store.getTask(id);
         if (taskToUpdate) {
             const oldStatus = taskToUpdate.estado;
             const newStatus = updatedFields.estado;
+
+            // Merge the existing task with the updated fields
             const updatedTask = { ...taskToUpdate, ...updatedFields };
             await this.store.saveTask(updatedTask);
 
             if (newStatus && oldStatus !== newStatus) {
                 await this.store.logEvent({ meetingId: this.activeMeetingId, type: 'TASK_STATUS_CHANGED', details: { id, oldStatus, newStatus } });
             }
+            // After saving, refresh the entire task list to ensure UI is consistent
             await this.refreshTasksView();
         }
     };

@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="custom.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
 </head>
 <body>
 
@@ -110,6 +111,9 @@
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit-pane" type="button" role="tab" aria-controls="audit-pane" aria-selected="false" data-i18n-key="audit_tab"></button>
                     </li>
+                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="gantt-tab" data-bs-toggle="tab" data-bs-target="#gantt-pane" type="button" role="tab" aria-controls="gantt-pane" aria-selected="false" data-i18n-key="gantt_tab"></button>
+                    </li>
                 </ul>
 
                 <!-- Tab Content -->
@@ -121,6 +125,9 @@
                             <div class="tab-pane fade" id="decisions-pane" role="tabpanel" aria-labelledby="decisions-tab"></div>
                     <div class="tab-pane fade" id="timeline-pane" role="tabpanel" aria-labelledby="timeline-tab"></div>
                     <div class="tab-pane fade" id="audit-pane" role="tabpanel" aria-labelledby="audit-tab"></div>
+                    <div class="tab-pane fade" id="gantt-pane" role="tabpanel" aria-labelledby="gantt-tab">
+                        <svg id="gantt-chart"></svg>
+                    </div>
                 </div>
             </div>
 
@@ -209,6 +216,7 @@
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
